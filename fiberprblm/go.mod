@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/gofiber/fiber/v3 v3.7.0
-	github.com/kartaladev/prblm v0.0.0-00010101000000-000000000000
+	github.com/kartaladev/prblm v0.1.0
 )
 
 require (
@@ -24,6 +24,3 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
-
-// The core is not tagged until the release step of add-mapper-plugins.
-replace github.com/kartaladev/prblm => ../

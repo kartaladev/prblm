@@ -11,11 +11,11 @@ No task here changes code or behavior, so there is no RED/GREEN/REFACTOR cycle; 
 
 ## 2. Slice: the core is released
 
-- [ ] 2.1 Move the CHANGELOG `[Unreleased]` entries to `[0.1.0]` (core including the sentinel errors and `MergeInto`, and `mappers/sqlmap`), commit, and with the owner's go-ahead tag the core `v0.1.0` and push the tag; verify `GOWORK=off go list -m github.com/kartaladev/prblm@v0.1.0` resolves with an empty module cache
+- [x] 2.1 Move the CHANGELOG `[Unreleased]` entries to `[0.1.0]` (core including the sentinel errors and `MergeInto`, and `mappers/sqlmap`), commit, and with the owner's go-ahead tag the core `v0.1.0` and push the tag; verify `GOWORK=off go list -m github.com/kartaladev/prblm@v0.1.0` resolves with an empty module cache
 
 ## 3. Slice: the adapters and plugins are released
 
-- [ ] 3.1 In `ginprblm`, `fiberprblm`, `mappers/gormmap`, `mappers/pgxmap` and `mappers/validatormap`, remove the core replace, require `v0.1.0` and run `go mod tidy`; verify `GOWORK=off go test -race ./...` passes in each against the real tag, `grep -l replace` finds no published `go.mod`, and CI is green
+- [x] 3.1 In `ginprblm`, `fiberprblm`, `mappers/gormmap`, `mappers/pgxmap` and `mappers/validatormap`, remove the core replace, require `v0.1.0` and run `go mod tidy`; verify `GOWORK=off go test -race ./...` passes in each against the real tag, `grep -l replace` finds no published `go.mod`, and CI is green
 - [ ] 3.2 With the owner's go-ahead, tag `ginprblm/v0.1.0`, `fiberprblm/v0.1.0`, `mappers/gormmap/v0.1.0`, `mappers/pgxmap/v0.1.0` and `mappers/validatormap/v0.1.0` on that commit and push them; verify `GOWORK=off go list -m <module>@v0.1.0` resolves for each
 - [ ] 3.3 Verify the release from a consumer's view: in an empty module outside the repository, `go get` each published module at `v0.1.0` and build a program that registers a sentinel, a gin and a fiber handler and each plugin's mapper; verify it builds and `go mod graph` shows no replace
 

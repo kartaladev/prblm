@@ -2,10 +2,8 @@ module github.com/kartaladev/prblm/mappers/gormmap
 
 go 1.27
 
-replace github.com/kartaladev/prblm => ../..
-
 require (
-	github.com/kartaladev/prblm v0.0.0-00010101000000-000000000000
+	github.com/kartaladev/prblm v0.1.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )
