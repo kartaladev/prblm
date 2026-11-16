@@ -4,9 +4,10 @@ No task here changes code or behavior, so there is no RED/GREEN/REFACTOR cycle; 
 
 ## 1. Slice: the repository lives at `kartaladev/prblm`
 
-- [ ] 1.1 Confirm the starting point: `add-mapper-plugins` and `add-error-sentinels` are archived and merged to `main`; on `main`, run the full verification in every module of `go.work` (`go vet`, `golangci-lint run ./...`, `go test -race ./...`) and `GOWORK=off go test ./...` in the six published modules; verify everything passes
-- [ ] 1.2 Decide with the owner whether issue #8 (a `*Problem` wrapped anywhere in the chain answers with its own status and detail) blocks `v0.1.0`, and record the decision here; if it blocks, stop this change until a separate change fixes it
-- [ ] 1.3 Transfer `zakyalvan/prblm` to `kartaladev` (done by the repository owner) and point `origin` at `git@github.com:kartaladev/prblm.git`; verify `gh repo view kartaladev/prblm` succeeds, `git remote -v` shows the new URL, `git push` works, and CI passes on the first push in the new repository
+- [x] 1.1 Confirm the starting point: `add-mapper-plugins` and `add-error-sentinels` are archived and merged to `main`; on `main`, run the full verification in every module of `go.work` (`go vet`, `golangci-lint run ./...`, `go test -race ./...`) and `GOWORK=off go test ./...` in the six published modules; verify everything passes
+- [x] 1.2 Decide with the owner whether issue #8 (a `*Problem` wrapped anywhere in the chain answers with its own status and detail) blocks `v0.1.0`, and record the decision here; if it blocks, stop this change until a separate change fixes it
+  - Decision (owner, 2026-11-16): #8 does not block v0.1.0. The behavior is documented and pinned by `TestSentinels_Override`; it is fixed in a later v0.x release by a separate change.
+- [x] 1.3 Transfer `zakyalvan/prblm` to `kartaladev` (done by the repository owner) and point `origin` at `git@github.com:kartaladev/prblm.git`; verify `gh repo view kartaladev/prblm` succeeds, `git remote -v` shows the new URL, `git push` works, and CI passes on the first push in the new repository
 
 ## 2. Slice: the core is released
 

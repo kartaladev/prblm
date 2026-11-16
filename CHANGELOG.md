@@ -10,7 +10,9 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
-The first release, planned as v0.1.0.
+## [0.1.0] - 2026-11-16
+
+The first release.
 
 ### Added
 
@@ -73,3 +75,6 @@ The first release, planned as v0.1.0.
   `sql.ErrNoRows` becomes a 404 problem, and `driver.ErrBadConn` and `sql.ErrConnDone` become a 503
   problem, each with a fixed, generic detail. `sql.ErrTxDone` and other errors are left to later
   mappers. `WithNotFound` and `WithUnavailable` replace either problem.
+
+[Unreleased]: https://github.com/kartaladev/prblm/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/kartaladev/prblm/releases/tag/v0.1.0
