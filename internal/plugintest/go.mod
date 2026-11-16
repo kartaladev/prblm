@@ -13,7 +13,7 @@ replace (
 
 require (
 	github.com/jackc/pgx/v5 v5.13.0
-	github.com/kartaladev/prblm v0.0.0-00010101000000-000000000000
+	github.com/kartaladev/prblm v0.1.0
 	github.com/kartaladev/prblm/mappers/gormmap v0.0.0-00010101000000-000000000000
 	github.com/kartaladev/prblm/mappers/pgxmap v0.0.0-00010101000000-000000000000
 	gorm.io/driver/postgres v1.6.3
