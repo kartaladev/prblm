@@ -47,10 +47,12 @@ var defaults = map[string]entry{
 	"40P01": retryConflict,
 	// Capacity: the database is overloaded.
 	"53300": unavailable,
-	// Query canceled, mostly by statement_timeout: pgx surfaces a canceled
-	// request context as a context error, not as this code. A retry would
-	// most likely time out again, so there is no Retry-After; 504 matches
-	// the core's mapping of context.DeadlineExceeded.
+	// Query canceled, by statement_timeout or a cancel request (pgx's
+	// CancelRequestContextWatcherHandler, pg_cancel_backend). pgx's default
+	// context watcher surfaces a canceled request context as a context
+	// error instead. A retry would most likely time out again, so there is
+	// no Retry-After; 504 matches the core's mapping of
+	// context.DeadlineExceeded.
 	"57014": {status: http.StatusGatewayTimeout, detail: "The request took too long to complete."},
 }
 

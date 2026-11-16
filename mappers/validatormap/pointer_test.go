@@ -82,10 +82,9 @@ func TestPointer(t *testing.T) {
 			var got []string
 
 			ves := fieldErrors(t, jsonValidator(), tt.value)
-			jsonNames := usesJSONNames(ves)
 
 			for _, fe := range ves {
-				p, f := location(fe, jsonNames)
+				p, f := location(fe, true)
 				if f != "" {
 					t.Errorf("location(%q) field = %q, want a pointer", fe.Namespace(), f)
 				}
@@ -114,10 +113,9 @@ func TestPointer(t *testing.T) {
 		var got []string
 
 		ves := fieldErrors(t, jsonValidator(), req)
-		jsonNames := usesJSONNames(ves)
 
 		for _, fe := range ves {
-			p, _ := location(fe, jsonNames)
+			p, _ := location(fe, true)
 			got = append(got, p)
 		}
 
@@ -145,7 +143,7 @@ func TestPointer(t *testing.T) {
 
 		ves := fieldErrors(t, jsonValidator(), cfg)
 
-		if p, _ := location(ves[0], usesJSONNames(ves)); p != "#/meta/x/admin/0/name" {
+		if p, _ := location(ves[0], true); p != "#/meta/x/admin/0/name" {
 			t.Errorf("location(%q) = %q, want %q", ves[0].Namespace(), p, "#/meta/x/admin/0/name")
 		}
 	})
@@ -158,7 +156,7 @@ func TestPointer(t *testing.T) {
 			t.Fatal("Var() did not fail with ValidationErrors")
 		}
 
-		if p, f := location(ves[0], usesJSONNames(ves)); p != "#" || f != "" {
+		if p, f := location(ves[0], true); p != "#" || f != "" {
 			t.Errorf("location() = (%q, %q), want (\"#\", \"\")", p, f)
 		}
 	})
@@ -243,7 +241,7 @@ func TestField(t *testing.T) {
 
 			ves := fieldErrors(t, validator.New(), tt.value)
 
-			p, f := location(ves[0], usesJSONNames(ves))
+			p, f := location(ves[0], false)
 			if p != "" || f != tt.want {
 				t.Errorf("location() = (%q, %q), want (\"\", %q)", p, f, tt.want)
 			}
@@ -282,4 +280,52 @@ func sameElements(a, b []string) bool {
 	slices.Sort(b)
 
 	return slices.Equal(a, b)
+}
+
+func TestNotDecoded(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		namespace string
+		want      bool
+	}{
+		{namespace: "", want: false},
+		{namespace: "User.name", want: false},
+		{namespace: "User." + notDecodedName, want: true},
+		{namespace: "User." + notDecodedName + ".name", want: true},
+		{namespace: "User.items[0]." + notDecodedName, want: true},
+		{namespace: "User.meta[" + notDecodedName + "]", want: false},
+		{namespace: "User.meta[" + notDecodedName + "].name", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.namespace, func(t *testing.T) {
+			t.Parallel()
+
+			if got := notDecoded(tt.namespace); got != tt.want {
+				t.Errorf("notDecoded(%q) = %v, want %v", tt.namespace, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSegments_Stop covers a consumer that stops early, at a key and at a
+// name: segments must stop yielding, as the iterator contract requires.
+func TestSegments_Stop(t *testing.T) {
+	t.Parallel()
+
+	for _, stopAt := range []string{"k", "b"} {
+		var got []string
+
+		for seg := range segments("a[k].b.c") {
+			got = append(got, seg)
+			if seg == stopAt {
+				break
+			}
+		}
+
+		if last := got[len(got)-1]; last != stopAt {
+			t.Errorf("segments stopped at %q, want %q (got %q)", last, stopAt, got)
+		}
+	}
 }

@@ -26,7 +26,7 @@ func ExampleMapper() {
 	v := validator.New(validator.WithRequiredStructEnabled(), validator.WithTagNameFuncBlankOmit())
 	v.RegisterTagNameFunc(validatormap.JSONName)
 
-	h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper()))
+	h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper(validatormap.WithJSONNames())))
 
 	handler := h.Wrap(func(_ http.ResponseWriter, r *http.Request) error {
 		var req vesselRequest
@@ -73,6 +73,7 @@ func ExampleWithTranslator() {
 	}
 
 	h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper(
+		validatormap.WithJSONNames(),
 		validatormap.WithTranslator(func(ctx context.Context) ut.Translator {
 			if ctx.Value(localeKey{}) == "id" {
 				return indonesian

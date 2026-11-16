@@ -1,8 +1,8 @@
 package validatormap
 
 import (
+	"iter"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -12,12 +12,11 @@ import (
 // when jsonNames is set, or otherwise the field's namespace without the
 // root struct name. Exactly one of them is non-empty. An error from
 // validating a single variable has no namespace and points at the whole
-// document.
+// document. The caller handles fields encoding/json never decodes (see
+// [notDecoded]), which have no location.
 //
-// jsonNames tells whether the validator reports JSON names. The caller
-// decides it once for all the entries of a problem (see [usesJSONNames]),
-// because a single entry whose JSON name equals its Go name looks the same
-// as one from a validator without a tag name function.
+// jsonNames tells whether the validator reports JSON names, as the
+// consumer declared with [WithJSONNames].
 func location(fe validator.FieldError, jsonNames bool) (pointer, field string) {
 	ns, structNS := fe.Namespace(), fe.StructNamespace()
 	if ns == "" {
@@ -41,16 +40,18 @@ func location(fe validator.FieldError, jsonNames bool) (pointer, field string) {
 	return pointerOf(rel), ""
 }
 
-// usesJSONNames reports whether the validator that produced ves reports
-// JSON names. The validator has no getter for its tag name function, but
-// with one registered, the namespace of JSON names differs from that of Go
-// names in at least one entry, unless every failed field's JSON name equals
-// its Go name; those entries then get a field, which still names them
-// correctly.
-func usesJSONNames(ves validator.ValidationErrors) bool {
-	return slices.ContainsFunc(ves, func(fe validator.FieldError) bool {
-		return fe.Namespace() != fe.StructNamespace()
-	})
+// notDecoded reports whether a name segment of the namespace ns is the name
+// [JSONName] gives a field encoding/json never decodes. Such a field has no
+// location in the request body. Map keys are not names, so a key that holds
+// that name does not count.
+func notDecoded(ns string) bool {
+	for seg, key := range segments(ns) {
+		if !key && seg == notDecodedName {
+			return true
+		}
+	}
+
+	return false
 }
 
 // relative returns the namespace ns without its root struct name when it
@@ -93,13 +94,15 @@ func firstSegment(ns string) string {
 }
 
 // pointerOf returns the JSON Pointer, in URI fragment form, of the field at
-// the namespace ns, which has no root struct name.
+// the namespace ns, which has no root struct name: each segment of ns (see
+// [segments]) is a reference token.
 func pointerOf(ns string) string {
 	var b strings.Builder
 
+	b.Grow(len(ns) + 4)
 	b.WriteByte('#')
 
-	for _, token := range tokens(ns) {
+	for token := range segments(ns) {
 		b.WriteByte('/')
 		b.WriteString(url.PathEscape(escapeToken(token)))
 	}
@@ -107,39 +110,43 @@ func pointerOf(ns string) string {
 	return b.String()
 }
 
-// tokens splits a namespace without its root into the reference tokens of a
-// JSON Pointer: names separated by "." and indexes or map keys in "[...]".
-// A key may itself contain "]", ".", or "[", so it ends at the first "]"
-// followed by the end, "." or "[".
+// segments yields the segments of a namespace without its root, in order:
+// the names separated by "." and, with key set, the indexes and map keys in
+// "[...]". A key may itself contain "]", ".", or "[", so it ends at the
+// first "]" followed by the end, "." or "[".
 //
 // The validator writes map keys unescaped, so a key that contains "]"
 // followed by "." or "[" (such as "x].admin[0") gives the same namespace as
 // a deeper path, and no parser can tell the two apart. The pointer then
 // follows the deeper path. Only the client that sent such a key gets the
 // misplaced pointer, and it still points into that client's own input.
-func tokens(ns string) []string {
-	var out []string
+func segments(ns string) iter.Seq2[string, bool] {
+	return func(yield func(seg string, key bool) bool) {
+		for i := 0; i < len(ns); {
+			switch ns[i] {
+			case '.':
+				i++
+			case '[':
+				end := keyEnd(ns, i+1)
+				if !yield(ns[i+1:end], true) {
+					return
+				}
 
-	for i := 0; i < len(ns); {
-		switch ns[i] {
-		case '.':
-			i++
-		case '[':
-			end := keyEnd(ns, i+1)
-			out = append(out, ns[i+1:end])
-			i = end + 1
-		default:
-			end := len(ns)
-			if j := strings.IndexAny(ns[i:], ".["); j >= 0 {
-				end = i + j
+				i = end + 1
+			default:
+				end := len(ns)
+				if j := strings.IndexAny(ns[i:], ".["); j >= 0 {
+					end = i + j
+				}
+
+				if !yield(ns[i:end], false) {
+					return
+				}
+
+				i = end
 			}
-
-			out = append(out, ns[i:end])
-			i = end
 		}
 	}
-
-	return out
 }
 
 // keyEnd returns the index of the "]" that closes the key starting at from,

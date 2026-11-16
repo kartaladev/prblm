@@ -107,7 +107,7 @@ func TestMapper_Translator(t *testing.T) {
 
 			var panics []*prblm.PanicError
 
-			h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper(tt.opts...)), prblm.OnError(recordPanics(&panics)))
+			h := prblm.NewHandler(prblm.WithMappers(jsonMapper(tt.opts...)), prblm.OnError(recordPanics(&panics)))
 			got := serve(t, h, "", err)
 
 			if got.status != 422 {
@@ -185,7 +185,7 @@ func TestMapper_TranslatorGaps(t *testing.T) {
 
 	var panics []*prblm.PanicError
 
-	m := validatormap.Mapper(validatormap.WithTranslator(func(context.Context) ut.Translator { return english }))
+	m := jsonMapper(validatormap.WithTranslator(func(context.Context) ut.Translator { return english }))
 	got := serve(t, prblm.NewHandler(prblm.WithMappers(m), prblm.OnError(recordPanics(&panics))), "", v.Struct(SignupRequest{}))
 
 	if len(panics) != 1 || panics[0].Value != "translation failed" || len(panics[0].Stack) == 0 {
@@ -210,7 +210,7 @@ func TestMapper_EndToEnd(t *testing.T) {
 
 	_, indonesian, validationErr := translated(t)
 
-	h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper(
+	h := prblm.NewHandler(prblm.WithMappers(jsonMapper(
 		validatormap.WithTranslator(func(ctx context.Context) ut.Translator {
 			if ctx.Value(localeKey{}) == "id" {
 				return indonesian
@@ -285,4 +285,67 @@ func TestMapper_EndToEnd(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Review of PR #6 (second pass): translations that panic for many entries
+// must not capture a stack per entry. The first panic is the problem's cause,
+// a *prblm.PanicError, and the rest only fall back to the default message.
+func TestMapper_TranslatorPanicsOnce(t *testing.T) {
+	t.Parallel()
+
+	uni := ut.New(en.New(), en.New())
+	english, _ := uni.GetTranslator("en")
+
+	v := newValidator()
+
+	regErr := v.RegisterTranslation("min", english,
+		func(trans ut.Translator) error { return trans.Add("min", "{0} is too small", false) },
+		func(ut.Translator, validator.FieldError) string { panic("translation broke") },
+	)
+	if regErr != nil {
+		t.Fatalf("RegisterTranslation() error = %v", regErr)
+	}
+
+	req := struct {
+		Items []int `json:"items" validate:"dive,min=1"`
+	}{Items: make([]int, 1000)}
+
+	var cause error
+
+	hook := func(_ context.Context, _ error, p *prblm.Problem) {
+		if p != nil {
+			cause = errors.Unwrap(p)
+		}
+	}
+
+	mapper := validatormap.Mapper(validatormap.WithTranslator(func(context.Context) ut.Translator { return english }))
+	got := serve(t, prblm.NewHandler(prblm.WithMappers(mapper), prblm.OnError(hook)), "", v.Struct(req))
+
+	if got.status != 422 {
+		t.Fatalf("status = %d, want 422", got.status)
+	}
+
+	// One *prblm.PanicError as the cause itself, not a join of many.
+	if _, ok := cause.(*prblm.PanicError); !ok { //nolint:errorlint // the cause itself must be the panic error
+		t.Errorf("cause = %T, want *prblm.PanicError", cause)
+	}
+}
+
+// Review of PR #6 (second pass): a translator that panics with
+// http.ErrAbortHandler aborts the response, as the core passes that panic on;
+// the mapper must not turn it into a recorded cause and a 422.
+func TestMapper_TranslatorAbort(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := translated(t)
+	mapper := validatormap.Mapper(validatormap.WithTranslator(func(context.Context) ut.Translator { panic(http.ErrAbortHandler) }))
+
+	defer func() {
+		if v := recover(); v != http.ErrAbortHandler { //nolint:errorlint // the panic value must be the sentinel itself
+			t.Errorf("recovered %v, want http.ErrAbortHandler", v)
+		}
+	}()
+
+	p := mapper.MapError(t.Context(), err)
+	t.Errorf("MapError returned %v, want the http.ErrAbortHandler panic to propagate", p)
 }

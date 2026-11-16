@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,6 +26,12 @@ type signupRequest struct {
 	Profile struct {
 		Color string `json:"color" validate:"oneof=red green blue"`
 	} `json:"profile"`
+}
+
+// jsonMapper returns the mapper configured by opts, declared to get JSON
+// names, as for a validator from newValidator.
+func jsonMapper(opts ...validatormap.Option) prblm.Mapper {
+	return validatormap.Mapper(append([]validatormap.Option{validatormap.WithJSONNames()}, opts...)...)
 }
 
 // newValidator returns a validator that reports JSON tag names.
@@ -131,12 +138,12 @@ func TestMapper_Validation(t *testing.T) {
 		wantStatus int
 	}{
 		// Scenario: Registered or not.
-		{name: "registered", mappers: []prblm.Mapper{validatormap.Mapper()}, err: invalidAge, wantStatus: 422, wantErrors: ageOnly},
+		{name: "registered", mappers: []prblm.Mapper{jsonMapper()}, err: invalidAge, wantStatus: 422, wantErrors: ageOnly},
 		{name: "not registered", err: invalidAge, wantStatus: http.StatusInternalServerError},
 		// Scenario: Invalid fields.
 		{
 			name:       "two fields",
-			mappers:    []prblm.Mapper{validatormap.Mapper()},
+			mappers:    []prblm.Mapper{jsonMapper()},
 			err:        validate[signupRequest](t, `{"age":0,"profile":{"color":"pink"}}`),
 			wantStatus: 422,
 			wantErrors: both,
@@ -144,21 +151,21 @@ func TestMapper_Validation(t *testing.T) {
 		// Scenario: Wrapped and empty validation errors.
 		{
 			name:       "wrapped",
-			mappers:    []prblm.Mapper{validatormap.Mapper()},
+			mappers:    []prblm.Mapper{jsonMapper()},
 			err:        fmt.Errorf("decode: %w", invalidAge),
 			wantStatus: 422,
 			wantErrors: ageOnly,
 		},
 		{
 			name:       "joined",
-			mappers:    []prblm.Mapper{validatormap.Mapper()},
+			mappers:    []prblm.Mapper{jsonMapper()},
 			err:        errors.Join(io.EOF, invalidAge),
 			wantStatus: 422,
 			wantErrors: ageOnly,
 		},
 		{
 			name:       "empty",
-			mappers:    []prblm.Mapper{validatormap.Mapper()},
+			mappers:    []prblm.Mapper{jsonMapper()},
 			err:        validator.ValidationErrors{},
 			wantStatus: http.StatusInternalServerError,
 		},
@@ -338,7 +345,7 @@ func TestMapper_XML(t *testing.T) {
 
 	err := validate[signupRequest](t, `{"age":0,"profile":{"color":"red"}}`)
 
-	got := serve(t, prblm.NewHandler(prblm.WithMappers(validatormap.Mapper())), "application/problem+xml", err)
+	got := serve(t, prblm.NewHandler(prblm.WithMappers(jsonMapper())), "application/problem+xml", err)
 
 	if got.contentType != "application/problem+xml" {
 		t.Errorf("Content-Type = %q, want application/problem+xml", got.contentType)
@@ -347,5 +354,36 @@ func TestMapper_XML(t *testing.T) {
 	const want = `<errors><i><detail>failed validation: min</detail><pointer>#/age</pointer></i></errors>`
 	if !strings.Contains(got.body, want) {
 		t.Errorf("body %q does not contain %q", got.body, want)
+	}
+}
+
+// probeUser has a struct-level rule that reports one of its fields under its
+// JSON name, as validator's own documentation shows.
+type probeUser struct {
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Age       int    `json:"age" validate:"min=1"`
+}
+
+// Review of PR #6 (second pass): a struct-level error reported with a JSON
+// name on a validator without a tag name function must not turn the other
+// entries into pointers built from Go names. Every entry is a field entry.
+func TestMapper_StructLevel(t *testing.T) {
+	t.Parallel()
+
+	v := validator.New(validator.WithRequiredStructEnabled())
+	v.RegisterStructValidation(func(sl validator.StructLevel) {
+		u, _ := reflect.TypeAssert[probeUser](sl.Current())
+		if u.FirstName == "" && u.LastName == "" {
+			sl.ReportError(u.FirstName, "first_name", "FirstName", "fnameorlname", "")
+		}
+	}, probeUser{})
+
+	got := serve(t, prblm.NewHandler(prblm.WithMappers(validatormap.Mapper())), "", v.Struct(probeUser{}))
+
+	want := `[{"detail":"failed validation: min","field":"Age"},` +
+		`{"detail":"failed validation: fnameorlname","field":"first_name"}]`
+	if e := errorsMember(t, got.body); e != want {
+		t.Errorf("errors = %s, want %s", e, want)
 	}
 }

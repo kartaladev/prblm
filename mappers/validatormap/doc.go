@@ -12,8 +12,8 @@
 // Registered, the mapper turns non-empty validation errors in the chain into
 // a problem with status 422, the detail "The request is not valid." and an
 // errors extension member, the shape of the RFC 9457 example: one object per
-// failed field, in the validator's order, with a detail and a JSON Pointer
-// to the field in the request body.
+// failed field, in the validator's order, with a detail and, with
+// [WithJSONNames], a JSON Pointer to the field in the request body.
 //
 //	{
 //	  "title": "Unprocessable Entity",
@@ -43,10 +43,12 @@
 //
 // The validator reports Go field names unless it has a tag name function.
 // Register [JSONName], which names fields as encoding/json does, on a
-// validator that omits blank names, so the mapper can build pointers:
+// validator that omits blank names, and declare it with [WithJSONNames], so
+// the mapper builds pointers:
 //
 //	v := validator.New(validator.WithRequiredStructEnabled(), validator.WithTagNameFuncBlankOmit())
 //	v.RegisterTagNameFunc(validatormap.JSONName)
+//	h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper(validatormap.WithJSONNames())))
 //
 // Both are needed for embedded structs. encoding/json promotes the fields of
 // an embedded struct without a json tag to the enclosing object, so its
@@ -56,7 +58,7 @@
 //
 // gin's binding validator has no tag name function. Register [JSONName] on
 // its engine before the first request, since the validator caches names per
-// type:
+// type, and [WithJSONNames] on the mapper:
 //
 //	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 //		v.RegisterTagNameFunc(validatormap.JSONName)
@@ -67,6 +69,11 @@
 // binding.Validator with a validator created with that option to flatten
 // embedded structs too.
 //
+// A field encoding/json never decodes, one tagged json:"-" or under such a
+// field, has no location in the request body: its entry has only the
+// default detail, even with a translator, with neither a pointer nor a
+// field.
+//
 // A pointer is an RFC 6901 JSON Pointer in URI fragment form: slice indexes
 // and map keys are tokens, "~" and "/" in a key are escaped as "~0" and
 // "~1", and other characters are percent-encoded ("#/meta/caf%C3%A9").
@@ -74,16 +81,16 @@
 // contains "]" followed by "." or "[" reads as a deeper path: the key
 // "x].admin[0" of meta gives "#/meta/x/admin/0/name". Only the client that
 // sent such a key gets the misplaced pointer.
-// Without JSON names, a pointer would be wrong, so each entry instead has a
-// field member: the Go namespace without the root struct
-// ("Items[0].Name"). The validator has no getter for its tag name function,
-// so the mapper decides once per problem: when any entry's JSON namespace
-// differs from its Go namespace, every entry has a pointer, otherwise every
-// entry has a field. A problem never mixes the two. When every failed
-// field's JSON name equals its Go name, the entries have fields, which
-// still name the fields correctly. Validate named struct types: for an
-// anonymous struct the validator reports no root name, which the mapper can
-// only partly tell apart from a named one.
+//
+// Without [WithJSONNames], each entry instead has a field member: the
+// namespace the validator reports, without the root struct
+// ("Items[0].Name"). A pointer built from Go names would name a location
+// the request body does not have. The validator has no getter for its tag
+// name function, so the mapper can't find out whether it reports JSON
+// names, and it never guesses from the errors: the same field always has
+// the same shape, and a problem never mixes pointers and fields. Validate
+// named struct types: for an anonymous struct the validator reports no root
+// name, which the mapper can only partly tell apart from a named one.
 //
 // # Translation
 //
@@ -93,11 +100,13 @@
 // validator's translations packages). A tag without a translation, a
 // translator function that returns nil, and a translation or function that
 // panics all fall back to the default detail, so a missing translation never
-// turns a 422 into a 500. A recovered panic becomes the cause of the
-// problem, as a [*prblm.PanicError] with the panic value and stack (joined
-// with [errors.Join] when there are several). The cause never reaches the
-// client, but the handler's OnError hook receives the problem, so it can
-// find the panic:
+// turns a 422 into a 500. The first recovered panic becomes the cause of
+// the problem, as a [*prblm.PanicError] with the panic value and stack; later
+// ones fall back to the default detail without capturing another stack, so
+// a request with many failing entries costs at most one. A panic with
+// [http.ErrAbortHandler] is passed on, as the handler does, so net/http
+// aborts the response. The cause never reaches the client, but the
+// handler's OnError hook receives the problem, so it can find the panic:
 //
 //	prblm.OnError(func(ctx context.Context, err error, p *prblm.Problem) {
 //		if pe, ok := errors.AsType[*prblm.PanicError](p); ok {

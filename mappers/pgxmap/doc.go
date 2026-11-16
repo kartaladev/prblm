@@ -23,11 +23,16 @@
 //
 // 40001, 40P01 and 53300 are retryable: their problems carry a Retry-After
 // header, one second unless [WithRetryAfter] sets another value. 57014
-// (query_canceled) is mostly a statement_timeout, since pgx reports a
-// canceled request context as a context error rather than this code. A
-// retry would most likely time out again, so its problem has no
-// Retry-After, and its 504 matches the handler's mapping of
-// context.DeadlineExceeded.
+// (query_canceled) comes from a statement_timeout or a cancel request. With
+// pgx's default context watcher, a canceled request context sets a socket
+// deadline and surfaces as a context error, which the handler maps itself.
+// With pgconn.CancelRequestContextWatcherHandler, or when an administrator
+// runs pg_cancel_backend, the cancel comes back as 57014 and is answered
+// 504 too; when the client went away, nobody reads that 504, and only the
+// handler's OnError hook and metrics see it. A retry of a statement timeout
+// would most likely time out again, and the client can't tell the causes
+// apart, so the problem has no Retry-After; its 504 matches the handler's
+// mapping of context.DeadlineExceeded.
 //
 // Every other code, such as an undefined table (42P01) or a syntax error
 // (42601), is a server fault: it is left to later mappers and finally to the

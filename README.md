@@ -581,7 +581,7 @@ generic details: no SQL, no row values, no constraint names, no rejected input.
 |---|---|---|
 | `mappers/sqlmap` | part of the core module | `sql.ErrNoRows` → 404, `driver.ErrBadConn` and `sql.ErrConnDone` → 503 |
 | `mappers/gormmap` | `go get github.com/kartaladev/prblm/mappers/gormmap` | `gorm.ErrRecordNotFound` → 404, `gorm.ErrDuplicatedKey` and `gorm.ErrForeignKeyViolated` → 409, `gorm.ErrCheckConstraintViolated` → 422 |
-| `mappers/pgxmap` | `go get github.com/kartaladev/prblm/mappers/pgxmap` | PostgreSQL errors by SQLSTATE: integrity violations → 409/422, retryable conflicts → 409 and capacity errors → 503, with `Retry-After`; statement timeouts (57014) → 504 |
+| `mappers/pgxmap` | `go get github.com/kartaladev/prblm/mappers/pgxmap` | PostgreSQL errors by SQLSTATE: integrity violations → 409/422, retryable conflicts → 409 and capacity errors → 503, with `Retry-After`; statement timeouts and cancel requests (57014) → 504 |
 | `mappers/validatormap` | `go get github.com/kartaladev/prblm/mappers/validatormap` | `validator.ValidationErrors` → 422 with an `errors` member of `{detail, pointer}` entries |
 
 `sqlmap` uses only the standard library, so it lives in the core module. The others are modules of
@@ -616,18 +616,24 @@ pgxmap.Mapper(pgxmap.WithConstraint("users_email_key", func(*pgconn.PgError) *pr
 v := validator.New(validator.WithRequiredStructEnabled(), validator.WithTagNameFuncBlankOmit())
 v.RegisterTagNameFunc(validatormap.JSONName)
 
-h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper()))
+// Tell the mapper the validator reports JSON names, so it builds pointers.
+h := prblm.NewHandler(prblm.WithMappers(validatormap.Mapper(validatormap.WithJSONNames())))
 // {"title":"Unprocessable Entity","status":422,"detail":"The request is not valid.","instance":"/v1/vessels",
 //  "errors":[{"detail":"failed validation: required","pointer":"#/name"},{"detail":"failed validation: min","pointer":"#/crew"}]}
 ```
 
 `validatormap.JSONName` follows `encoding/json`, including embedded structs, whose fields it promotes
-(`#/name`, not `#/Base/name`); that needs `WithTagNameFuncBlankOmit`. Without a tag name function,
-entries carry a `field` (the Go namespace) instead of a pointer, which would be wrong. A problem
-never mixes the two, so read `pointer` and fall back to `field`.
+(`#/name`, not `#/Base/name`); that needs `WithTagNameFuncBlankOmit`. The validator has no getter
+for its tag name function, so the mapper can't tell whether it reports JSON names, and it doesn't
+guess. Without `validatormap.WithJSONNames()`, every entry carries a `field` (the namespace the
+validator reports, without the root struct) instead of a pointer, which could be wrong. With it,
+every entry carries a `pointer`. A problem never mixes the two, so read `pointer` and fall back to
+`field`. A field `encoding/json` never decodes (tagged `json:"-"`) has no location in the body, so
+its entry carries only the default `detail`, even with a translator.
 
 gin's binding validator has no tag name function, so its entries carry `field`. Register
-`JSONName` on gin's engine before the first request (the validator caches names per type):
+`JSONName` on gin's engine before the first request (the validator caches names per type), and
+`WithJSONNames()` on the mapper:
 
 ```go
 if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
@@ -640,8 +646,10 @@ its fields' pointers (`#/Base/name`). To flatten embedded structs too, replace `
 with a validator created with that option.
 
 `validatormap.WithTranslator` picks a translator per request; a missing or failing translation falls
-back to `failed validation: <tag>`. A translator that panics still gives the 422, and the
-`*prblm.PanicError` becomes the problem's cause, which the `OnError` hook can find with `errors.As`.
+back to `failed validation: <tag>`. A translator that panics still gives the 422, and the first
+`*prblm.PanicError` becomes the problem's cause, which the `OnError` hook can find with `errors.As`;
+later panics in the same problem capture no further stack. A panic with `http.ErrAbortHandler` is
+passed on, so net/http aborts the response.
 
 ### Combining plugins
 
@@ -657,7 +665,7 @@ h := prblm.NewHandler(prblm.WithMappers(
 	sqlmap.Mapper(),
 	pgxmap.Mapper(), // before gormmap
 	gormmap.Mapper(),
-	validatormap.Mapper(),
+	validatormap.Mapper(validatormap.WithJSONNames()),
 ))
 ```
 
@@ -669,10 +677,10 @@ h := prblm.NewHandler(prblm.WithMappers(
 | all | detail | a fixed generic sentence | the per-case options |
 | pgxmap | PostgreSQL detail | hidden | `pgxmap.WithDatabaseDetail()`, **which exposes row values and schema names: internal APIs only** |
 | pgxmap | `Retry-After` on the default problems for 40001, 40P01, 53300 | 1 second | `pgxmap.WithRetryAfter` |
-| pgxmap | 57014 (statement timeout) | 504, no `Retry-After` | `pgxmap.WithCode("57014", ...)` |
+| pgxmap | 57014 (statement timeout or cancel request) | 504, no `Retry-After` | `pgxmap.WithCode("57014", ...)` |
 | validatormap | status | 422 | `validatormap.WithStatus` (400–499) |
 | validatormap | message | `failed validation: <tag>` | `validatormap.WithTranslator` |
-| validatormap | location | `pointer` with JSON names, otherwise `field`, never both in one problem | `validatormap.JSONName` |
+| validatormap | location | `field`, never both `field` and `pointer` in one problem | `validatormap.WithJSONNames()`, with `validatormap.JSONName` registered, for `pointer` |
 
 ## Defaults
 
