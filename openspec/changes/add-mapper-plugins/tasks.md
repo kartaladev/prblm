@@ -156,6 +156,33 @@ The release itself (transfer, CHANGELOG, tags; formerly 7.2–7.5) moved to the 
 - [x] 8.10 Re-run 7.1's full verification in every module, including `internal/plugintest`, and check `go tool cover -func` covers the new branches (gormmap's new cases, `WithCode` validation, the per-problem location choice, `JSONName`, the panic cause)
 - [x] 8.11 Security review follow-up: pin the misplaced pointer for a map key containing `]` followed by `.` or `[` with `TestPointer/map_key_with_delimiters`, and document the limit in the godoc, the spec and D6 (it can't be fixed in the mapper: the validator writes keys unescaped)
 
+## 9. Second review fixes (PR #6 review of the fix commits and verification)
+
+Each defect was reproduced first by the named test, which fails on `5ecfe34`; the tests are the RED steps. An embedded pointer to an unexported struct was checked and is not a defect (the passing row of `TestMapper_NotDecoded`).
+
+- [x] 9.1 Declare JSON names explicitly with `WithJSONNames()` (validation-error-mapping / Scenario: Struct-level errors, Scenario: JSON names equal to Go names, Scenario: No tag name function; the scenarios that now register the option); verify `go test -race -run 'TestMapper_(StructLevel|NamesEqualGoNames|Validation|EmbeddedStruct|XML)|TestField|TestPointer'` passes in `mappers/validatormap`
+  - RED: `TestMapper_StructLevel` (`Age` gets `#/Age`); the `ID` only row expecting `#/ID` with the option fails to compile until the option exists
+  - GREEN: `WithJSONNames`; `location` takes the configured choice; remove `usesJSONNames`
+  - REFACTOR: register the option in the examples, README and godoc next to `JSONName`; /simplify
+- [x] 9.2 Follow `encoding/json` in `JSONName` and give fields it never decodes a detail-only entry (validation-error-mapping / Scenario: JSON names, Scenario: Fields encoding/json never decodes, Scenario: Embedded structs); verify `go test -race -run 'TestJSONName|TestMapper_(NotDecoded|EmbeddedStruct)'` passes
+  - RED: `TestJSONName/Weird` (returns `a\b`), `TestMapper_NotDecoded/json_dash_field` (`#`) and `/json_dash_nested_struct` (`#/name`)
+  - GREEN: the Go name for a tag name `encoding/json` rejects; a reserved name for `json:"-"`; no pointer or field for an entry holding it
+  - REFACTOR: /simplify
+- [x] 9.3 Capture one stack per problem for panicking translations, as the problem's cause (validation-error-mapping / Scenario: Panicking translations, the 1,000 entries row); verify `go test -race -run 'TestMapper_Translator'` passes
+  - RED: `TestMapper_TranslatorPanicsOnce` (cause is `*errors.joinError` holding 1,000 panic errors)
+  - GREEN: keep the first `*prblm.PanicError`, skip `debug.Stack` afterwards, set it as the cause directly
+  - REFACTOR: /simplify
+- [x] 9.4 Let `http.ErrAbortHandler` propagate from the translator (validation-error-mapping / Scenario: Panicking translations, the `http.ErrAbortHandler` row); verify `go test -race -run TestMapper_TranslatorAbort` passes
+  - RED: `TestMapper_TranslatorAbort` (returns a 422 problem)
+  - GREEN: re-panic that sentinel in `recoverInto`
+  - REFACTOR: /simplify
+- [x] 9.5 Correct the `pgxmap` godoc on 57014 (cancel requests, `CancelRequestContextWatcherHandler`, `pg_cancel_backend`); documentation only, not verified by a test because it needs a real PostgreSQL server; verify `go doc ./mappers/pgxmap` shows the corrected text and lint passes
+- [x] 9.7 Keep the default detail for fields `encoding/json` never decodes, also with a translator (validation-error-mapping / Scenario: Translated fields encoding/json never decodes); found by `/simplify` (altitude review) after 9.2; verify `go test -race -run 'TestMapper_NotDecoded'` passes
+  - RED: `TestMapper_NotDecodedTranslated` (detail `json:"-" is required`)
+  - GREEN: the mapper loop decides not-decoded once per entry (`entryOf`) and skips the translator; `location` no longer checks it
+  - REFACTOR: godoc of `JSONName` and the package; /simplify cleanups (`tokens` folded into `pointerOf`, `jsonMapper` test helper, `panicErrors` removed)
+- [x] 9.6 Re-run the full verification in every module (`-race`, vet, lint, `GOWORK=off go test ./...` for the published modules, the root dependency check) and check `go tool cover -func` covers the new branches (`WithJSONNames`, the reserved name, the detail-only entry, the single stack, the abort re-panic); run gopls `go_diagnostics` on changed files
+
 ## Workflow follow-up
 
 - Archive the change after review; the release continues in `release-v0-1-0`.

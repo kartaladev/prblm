@@ -44,7 +44,7 @@ When registered, a PostgreSQL error in the chain SHALL be mapped by its SQLSTATE
 | `53300` | 503 | `The service is temporarily unavailable.` |
 
 ##### Examples: canceled statements
-`57014` (`query_canceled`) is raised by `statement_timeout` and by cancel requests. A retry would most likely hit the same timeout, so it maps to 504 like the core's `context.DeadlineExceeded`, without `Retry-After`.
+`57014` (`query_canceled`) is raised by `statement_timeout` and by cancel requests, including the one pgx sends for a canceled request context when configured with `CancelRequestContextWatcherHandler`, and an administrator's `pg_cancel_backend`. A retry would most likely hit the same timeout, so it maps to 504 like the core's `context.DeadlineExceeded`, without `Retry-After`. When the cancel came from a client that went away, nobody reads the 504; only the hook and metrics see it.
 
 | code | status | detail |
 |------|--------|--------|

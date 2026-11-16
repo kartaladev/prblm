@@ -124,7 +124,7 @@ func WithCode(code string, fn func(*pgconn.PgError) *prblm.Problem) Option // pe
   5. otherwise, no match
 - The default table is a package-level `map[string]entry{status, detail, retry bool}`, read-only after init.
 - `Retry-After` is set through `prblm.WithHeader` on the default problems of retryable codes (`40001`, `40P01`, `53300`), in whole seconds (`strconv.FormatInt(int64(d/time.Second), 10)`). Construction panics when `d < time.Second`. Problems from `WithConstraint` and `WithCode` functions are used as built; they add the header themselves when they need it.
-- `57014` (`query_canceled`: `statement_timeout` or a cancel request) maps to 504 without `Retry-After`. pgx cancels a request's context by setting a socket deadline rather than sending a cancel request, so the context error the core maps to 504 is what a canceled request surfaces as, and a `57014` that reaches the mapper is mostly a statement timeout. Retrying it at once would most likely time out again, and the client can't tell the two causes apart.
+- `57014` (`query_canceled`: `statement_timeout` or a cancel request) maps to 504 without `Retry-After`. With pgx's default context watcher, a canceled request context sets a socket deadline and surfaces as a context error, which the core handles. With `CancelRequestContextWatcherHandler`, or an administrator's `pg_cancel_backend`, the cancel comes back as `57014` and is answered 504 too; when the client went away, nobody reads that 504, and only the hook and metrics see it. The godoc says so instead of promising that `57014` is only a statement timeout. Not verified with a test: it needs a real PostgreSQL server and the cancel-request watcher. Retrying a statement timeout at once would most likely time out again, and the client can't tell the causes apart.
 - `WithCode` panics unless the code is five characters of digits and upper-case ASCII letters, the form PostgreSQL reports. A lower-case or short code would never match and the override would silently do nothing.
 - `WithDatabaseDetail` replaces the generic detail with `pe.Detail` only when that's non-empty. The message, hint, schema, table, column, data type and where fields are never used.
 - *Alternative:* mapping by SQLSTATE class (`23xxx`) instead of exact codes. Rejected, because classes mix client and server faults (e.g. `23P01` exclusion violations need their own decision), and an explicit table is easier to review.
@@ -143,6 +143,7 @@ func WithStatus(code int) Option       // 400..499, else construction panic
 func WithType(uri string) Option
 func WithTitle(title string) Option
 func WithTranslator(fn func(ctx context.Context) ut.Translator) Option
+func WithJSONNames() Option                   // the validator reports JSON names: build pointers
 func JSONName(fld reflect.StructField) string // tag name function following encoding/json
 ```
 
@@ -151,9 +152,10 @@ The mapper:
 - The problem gets the status (default 422), type and title (empty by default, so the core fills in the reason phrase), detail `The request is not valid.`, and the `errors` extension.
 - Entries are `[]entry` with `Detail string \`json:"detail"\``, `Pointer string \`json:"pointer,omitempty"\`` and `Field string \`json:"field,omitempty"\``. They're plain structs, so the core encodes JSON and XML from the same tags.
 
-Choosing between `pointer` and `field`, once per problem:
-- The validator has no getter for its tag name function, so the mapper infers it. When any entry's `Namespace()` differs from its `StructNamespace()`, a tag name function is registered and every entry gets a `pointer`, including entries whose JSON names equal their Go names. When all are equal, every entry gets `field`. A problem never mixes the two, so a client reading `pointer` never silently drops an entry.
-- The one case the inference can't see: a problem whose failed fields all have JSON names equal to their Go names. It gets `field` entries, which still name the field correctly.
+Choosing between `pointer` and `field` is explicit:
+- Without `WithJSONNames()`, every entry gets `field`: the namespace the validator reports, without the root struct name. With it, every entry gets a `pointer`, except entries for fields `encoding/json` never decodes, which get only their `detail`. The same field always has the same shape, and a problem never mixes `pointer` and `field`.
+- The validator has no getter for its tag name function, so only the consumer knows whether it reports JSON names. The option says so; the README, godoc and examples register it next to `JSONName`.
+- *Alternative (first shipped, replaced after the second review):* infer the choice per problem, taking any entry whose `Namespace()` differs from its `StructNamespace()` as proof of a tag name function. Rejected: a struct-level `sl.ReportError` with a JSON field name on a validator without a tag name function turned every other entry into a pointer built from a Go name (`TestMapper_StructLevel`), and a field's shape changed with which other fields failed.
 
 Building the pointer from `fe.Namespace()`:
 - Strip the first segment (the root struct) when there is one; see the anonymous-struct failure mode below. An empty remainder gives the pointer `#`.
@@ -164,9 +166,9 @@ The message:
 - With a translator, use `fe.Translate(t)`, otherwise `"failed validation: " + fe.Tag()`.
 - Never use `fe.Value()`, `fe.Param()` or `fe.Error()`. Each can carry the rejected value, struct names or parameters.
 
-On the translator panic: it's recovered locally rather than by the core. A translator panic is a problem with an optional enhancement, not with the mapper, so losing the whole 422 to a 500 would be worse for clients. This is the one place a plugin contains a panic itself. The plugin has no access to the hook, so it records each recovered panic as a `*prblm.PanicError` (value and stack) in the problem's cause with `prblm.WithCause`, joined with `errors.Join` when there are several. The cause never reaches the client, and the `OnError` hook receives the problem and finds the panic with `errors.As`. *Alternative:* a core API to report a note from a mapper. Postponed: it widens the core API for one caller.
+On the translator panic: it's recovered locally rather than by the core. A translator panic is a problem with an optional enhancement, not with the mapper, so losing the whole 422 to a 500 would be worse for clients. This is the one place a plugin contains a panic itself. The plugin has no access to the hook, so it records the first recovered panic as a `*prblm.PanicError` (value and stack) and sets it as the problem's cause with `prblm.WithCause`. Later panics for the same problem fall back to the default message without capturing another stack: one stack per problem bounds the cost a request with many failing entries can cause (`TestMapper_TranslatorPanicsOnce`). The cause never reaches the client, and the `OnError` hook receives the problem and finds the panic. A panic with `http.ErrAbortHandler` is re-panicked, as the core does, so net/http aborts the response (`TestMapper_TranslatorAbort`). *Alternative:* a core API to report a note from a mapper. Postponed: it widens the core API for one caller.
 
-Embedded structs: the validator puts an embedded struct's name in the namespace (`Order.Base.name`), while `encoding/json` flattens its fields (`#/name`). `FieldError` doesn't expose the root type, so the mapper can't tell an embedded segment from a nested one. The fix is at the source: validator v10.30.3+ drops a segment when the tag name function returns "" and the validator was created with `validator.WithTagNameFuncBlankOmit()`. `JSONName` follows `encoding/json`'s naming: the json tag name when there is one, "" for `json:"-"` and for an untagged embedded struct (or pointer to struct), and the Go name otherwise. The godoc, README and examples register both.
+Embedded structs: the validator puts an embedded struct's name in the namespace (`Order.Base.name`), while `encoding/json` flattens its fields (`#/name`). `FieldError` doesn't expose the root type, so the mapper can't tell an embedded segment from a nested one. The fix is at the source: validator v10.30.3+ drops a segment when the tag name function returns "" and the validator was created with `validator.WithTagNameFuncBlankOmit()`. `JSONName` follows `encoding/json`'s naming: the json tag name when `encoding/json` accepts it (the Go name for a tag name it rejects, `TestJSONName/Weird`), "" for an untagged embedded struct (or pointer to struct) whose fields are promoted, including an unexported one, and the Go name otherwise. For `json:"-"` it returns a reserved name that no JSON member can have, not "": with `WithTagNameFuncBlankOmit` an empty name drops the segment, which pointed a server-only field at `#` or at an unrelated member (`TestMapper_NotDecoded`). The mapper gives an entry whose namespace holds the reserved name only its `detail`, and always the default one: the validator names the field by the reserved name in translations too, so a translated detail would show `json:"-"` to the client (`TestMapper_NotDecodedTranslated`). The mapper loop decides this once per entry, before choosing the location and the message. The godoc, README and examples register `JSONName`, `WithTagNameFuncBlankOmit` and `WithJSONNames` together.
 
 - *Alternative:* RFC 7807-era `invalid-params` with `name`/`reason`. Rejected in favor of the RFC 9457 §3 example shape.
 - **Failure modes:**
@@ -178,6 +180,11 @@ Embedded structs: the validator puts an embedded struct's name in the namespace 
   - **A translation that panics:** recovered per entry, like the translator function, and the default message is used.
   - **An anonymous root struct:** the validator reports no root segment for it (found in implementation, `TestPointer/anonymous_struct`). A root is stripped only when `Namespace()` and `StructNamespace()` start with the same segment; with equal namespaces, a single segment is a field. A nested field of an anonymous struct whose first JSON name equals its Go name stays ambiguous; documented.
   - **A huge number of failed fields:** entries are bounded by what the validator returns. No cap is added; documented.
+  - **A struct-level error reported with a JSON name, on a validator without a tag name function:** every entry is a `field` entry; nothing is inferred (`TestMapper_StructLevel`).
+  - **A field tagged `json:"-"`, or a struct under one:** detail-only entry with the default detail, also with a translator (`TestMapper_NotDecoded`, `TestMapper_NotDecodedTranslated`).
+  - **Many translations that panic:** one stack per problem (`TestMapper_TranslatorPanicsOnce`).
+  - **A translator panicking with `http.ErrAbortHandler`:** re-panicked (`TestMapper_TranslatorAbort`).
+  - **Checked in review and not a defect:** an embedded pointer to an unexported struct. `encoding/json` promotes its fields and decodes into it when allocated, so its pointer is right (`TestMapper_NotDecoded/embedded_pointer_to_an_unexported_struct`).
   - **A tag name function that doesn't omit embedded structs, or a validator without `WithTagNameFuncBlankOmit`:** the embedded struct's name stays in the pointer. Documented next to `JSONName`.
 
 ### D7. Module and CI wiring
@@ -205,7 +212,7 @@ Embedded structs: the validator puts an embedded struct's name in the namespace 
 | gormmap, pgxmap | registration order | driver mapper first | keeps the driver mapper's constraint and code problems | — |
 | validatormap | status | 422 | RFC 9457 example and semantics of a well-formed but invalid body | `WithStatus` (400–499) |
 | validatormap | message | `failed validation: <tag>` | no values, no struct names | `WithTranslator` |
-| validatormap | location | `pointer`, or `field` when JSON names are unknown, never both in one problem | never emit a wrong pointer | register `JSONName` on a validator created with `WithTagNameFuncBlankOmit()` |
+| validatormap | location | `field`; detail only for a field `encoding/json` never decodes; never both `pointer` and `field` in one problem | never emit a wrong pointer | `WithJSONNames()`, with `JSONName` registered on a validator created with `WithTagNameFuncBlankOmit()`, for pointers |
 
 ## Hot Paths
 

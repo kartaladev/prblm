@@ -19,7 +19,7 @@ Most Go services return the same kinds of errors from their data and validation 
   - per-constraint problem overrides
 - `mappers/validatormap`, its own module:
   - `validator.ValidationErrors` → 422 with the RFC 9457 `errors: [{detail, pointer}]` extension
-  - JSON Pointers built from JSON field names, with `JSONName`, a tag name function that follows `encoding/json` (embedded structs included)
+  - JSON Pointers built from JSON field names when declared with `WithJSONNames()`, with `JSONName`, a tag name function that follows `encoding/json` (embedded structs included); otherwise `field` entries with the reported names, and detail-only entries for fields `encoding/json` never decodes
   - optional translation per request
   - configurable status, type and title
 - Every plugin exposes one constructor returning a core `prblm.Mapper`, plus options to replace the problem produced for each case.
