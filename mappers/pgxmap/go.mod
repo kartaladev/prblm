@@ -2,11 +2,9 @@ module github.com/kartaladev/prblm/mappers/pgxmap
 
 go 1.27
 
-replace github.com/kartaladev/prblm => ../..
-
 require (
 	github.com/jackc/pgx/v5 v5.13.0
-	github.com/kartaladev/prblm v0.0.0-00010101000000-000000000000
+	github.com/kartaladev/prblm v0.1.0
 )
 
 require (
