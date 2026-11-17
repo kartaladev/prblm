@@ -26,6 +26,9 @@ type Handler struct {
 	enrichers []func(ctx context.Context, p *Problem)
 	// onError is the hook set with OnError, or nil.
 	onError func(ctx context.Context, err error, p *Problem)
+	// hooks are the non-nil hooks added with AddErrorHook, in order. They run
+	// after onError.
+	hooks []func(ctx context.Context, err error, p *Problem)
 	// namespace is the namespace set with WithNamespace: as given until
 	// NewHandler checks it, then without its trailing slash, or "" for none.
 	namespace string
@@ -286,15 +289,26 @@ func (h *Handler) report(ctx context.Context, err error, p *Problem) {
 // check it before building a report, so nobody pays for one that nobody
 // reads.
 func (h *Handler) isReporting(ctx context.Context) bool {
-	return h.onError != nil && !isSilent(ctx)
+	return (h.onError != nil || len(h.hooks) > 0) && !isSilent(ctx)
 }
 
-// callHook calls the OnError hook, which the caller has checked with
-// isReporting. A hook that panics is ignored.
+// callHook calls the OnError hook, if any, and then the added hooks, in
+// order. The caller has checked isReporting. A hook that panics is ignored.
 func (h *Handler) callHook(ctx context.Context, err error, p *Problem) {
 	defer func() { _ = recover() }()
 
-	h.onError(ctx, err, p)
+	if h.onError != nil {
+		callOne(ctx, h.onError, err, p)
+	}
+
+	for _, hook := range h.hooks {
+		callOne(ctx, hook, err, p)
+	}
+}
+
+// callOne calls one hook with the report.
+func callOne(ctx context.Context, hook func(context.Context, error, *Problem), err error, p *Problem) {
+	hook(ctx, err, p)
 }
 
 // Responding: turning a resolved problem into a response.

@@ -2,11 +2,11 @@
 
 ## 1. Slice: `AddErrorHook` beside `OnError` in the core, end to end through net/http
 
-- [ ] 1.1 Added hooks run after the `OnError` hook, in the order added (error-mapping / Scenario: Replaced and added hooks, Examples: registered); verify `go test -race -run TestHooks_Order ./` passes
+- [x] 1.1 Added hooks run after the `OnError` hook, in the order added (error-mapping / Scenario: Replaced and added hooks, Examples: registered); verify `go test -race -run TestHooks_Order ./` passes
   - RED: `TestHooks_Order`, a table test through `Handler.Wrap` and `httptest`, with the six "registered" rows. Each hook appends its name to a shared, mutex-guarded slice. Fails to compile because `AddErrorHook` doesn't exist; confirm that this is the only error.
   - GREEN: a `hooks` field on `Handler`. `AddErrorHook` appends, `isReporting` checks both slots, and `callHook` calls `onError` and then each hook.
   - REFACTOR: the Divergent Change risk in `callHook`. Extract Function `callOne(hook)` for the single call, then /simplify
-- [ ] 1.2 Nil hooks and `OnError(nil)` (error-mapping / Scenario: Replaced and added hooks, Examples: misuse); verify `go test -race -run TestHooks_Misuse ./` passes
+- [x] 1.2 Nil hooks and `OnError(nil)` (error-mapping / Scenario: Replaced and added hooks, Examples: misuse); verify `go test -race -run TestHooks_Misuse ./` passes
   - RED: `TestHooks_Misuse` with the four misuse rows. `AddErrorHook(nil)` panics with a nil call before the fix, or adds a nil entry. Confirm the failure.
   - GREEN: `AddErrorHook` ignores nil. `OnError` stays unchanged.
   - REFACTOR: none expected; /simplify

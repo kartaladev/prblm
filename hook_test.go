@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 
@@ -224,4 +225,169 @@ func TestResolve_FaultyConsumer_NoHook(t *testing.T) {
 	if rec := write(t, h, errVesselNotFound); rec.Code != 409 {
 		t.Errorf("status = %d, want 409", rec.Code)
 	}
+}
+
+// namedCall is one call of a named hook.
+type namedCall struct {
+	err    error
+	name   string
+	status int
+}
+
+// callLog records the calls of several named hooks, in the order they
+// happen.
+type callLog struct {
+	mu    sync.Mutex
+	calls []namedCall
+}
+
+// hook returns a hook that records its calls under name.
+func (l *callLog) hook(name string) func(context.Context, error, *prblm.Problem) {
+	return func(_ context.Context, err error, p *prblm.Problem) {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		status := 0
+		if p != nil {
+			status = p.Status
+		}
+
+		l.calls = append(l.calls, namedCall{err: err, name: name, status: status})
+	}
+}
+
+func (l *callLog) recorded() []namedCall {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return slices.Clone(l.calls)
+}
+
+// names returns the names of the hooks called, in order.
+func names(calls []namedCall) []string {
+	out := make([]string, 0, len(calls))
+	for _, c := range calls {
+		out = append(out, c.name)
+	}
+
+	return out
+}
+
+// hookCase is a row of the replaced and added hooks scenario.
+type hookCase struct {
+	opts  func(l *callLog) []prblm.Option
+	name  string
+	calls []string
+}
+
+// checkHookCases runs each case: the handler writes errors.New("boom"),
+// and the hooks must be called in the order of calls, each with that error
+// and status 500.
+func checkHookCases(t *testing.T, tests []hookCase) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var l callLog
+
+			boom := errors.New("boom")
+			write(t, prblm.NewHandler(tt.opts(&l)...), boom)
+
+			calls := l.recorded()
+			if got := names(calls); !slices.Equal(got, tt.calls) {
+				t.Fatalf("hooks called %v, want %v", got, tt.calls)
+			}
+
+			for _, c := range calls {
+				//nolint:errorlint // each hook must receive the original error value itself.
+				if c.err != boom || c.status != http.StatusInternalServerError {
+					t.Errorf("hook %s got %v with status %d, want boom with 500", c.name, c.err, c.status)
+				}
+			}
+		})
+	}
+}
+
+// error-mapping / Scenario: Replaced and added hooks (Examples: registered).
+func TestHooks_Order(t *testing.T) {
+	t.Parallel()
+
+	checkHookCases(t, []hookCase{
+		{
+			name:  "OnError only",
+			opts:  func(l *callLog) []prblm.Option { return []prblm.Option{prblm.OnError(l.hook("A"))} },
+			calls: []string{"A"},
+		},
+		{
+			name:  "AddErrorHook only",
+			opts:  func(l *callLog) []prblm.Option { return []prblm.Option{prblm.AddErrorHook(l.hook("B"))} },
+			calls: []string{"B"},
+		},
+		{
+			name: "OnError then two added",
+			opts: func(l *callLog) []prblm.Option {
+				return []prblm.Option{prblm.OnError(l.hook("A")), prblm.AddErrorHook(l.hook("B")), prblm.AddErrorHook(l.hook("C"))}
+			},
+			calls: []string{"A", "B", "C"},
+		},
+		{
+			name: "added before OnError",
+			opts: func(l *callLog) []prblm.Option {
+				return []prblm.Option{prblm.AddErrorHook(l.hook("B")), prblm.OnError(l.hook("A"))}
+			},
+			calls: []string{"A", "B"},
+		},
+		{
+			name: "OnError replaced",
+			opts: func(l *callLog) []prblm.Option {
+				return []prblm.Option{prblm.OnError(l.hook("A")), prblm.OnError(l.hook("A2")), prblm.AddErrorHook(l.hook("B"))}
+			},
+			calls: []string{"A2", "B"},
+		},
+		{
+			name: "same hook added twice",
+			opts: func(l *callLog) []prblm.Option {
+				b := l.hook("B")
+
+				return []prblm.Option{prblm.AddErrorHook(b), prblm.AddErrorHook(b)}
+			},
+			calls: []string{"B", "B"},
+		},
+	})
+}
+
+// error-mapping / Scenario: Replaced and added hooks (Examples: misuse).
+func TestHooks_Misuse(t *testing.T) {
+	t.Parallel()
+
+	checkHookCases(t, []hookCase{
+		{
+			name: "OnError(nil) keeps added hooks",
+			opts: func(l *callLog) []prblm.Option {
+				return []prblm.Option{prblm.AddErrorHook(l.hook("B")), prblm.OnError(nil)}
+			},
+			calls: []string{"B"},
+		},
+		{
+			name: "OnError(nil) clears OnError",
+			opts: func(l *callLog) []prblm.Option {
+				return []prblm.Option{prblm.OnError(l.hook("A")), prblm.OnError(nil)}
+			},
+			calls: []string{},
+		},
+		{
+			name:  "nil added hook",
+			opts:  func(*callLog) []prblm.Option { return []prblm.Option{prblm.AddErrorHook(nil)} },
+			calls: []string{},
+		},
+		{
+			name: "nil added hook among others",
+			opts: func(l *callLog) []prblm.Option {
+				return []prblm.Option{prblm.OnError(l.hook("A")), prblm.AddErrorHook(nil), prblm.AddErrorHook(l.hook("C"))}
+			},
+			calls: []string{"A", "C"},
+		},
+	})
 }

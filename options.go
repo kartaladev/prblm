@@ -64,3 +64,12 @@ func OnError(hook func(ctx context.Context, err error, p *Problem)) Option {
 		h.onError = hook
 	}
 }
+
+// AddErrorHook adds a hook called after the [OnError] hook.
+func AddErrorHook(hook func(ctx context.Context, err error, p *Problem)) Option {
+	return func(h *Handler) {
+		if hook != nil {
+			h.hooks = append(h.hooks, hook)
+		}
+	}
+}
