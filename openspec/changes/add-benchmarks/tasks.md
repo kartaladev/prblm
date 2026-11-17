@@ -29,7 +29,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
   - RED: the pre-loop assertion of each new case shown to catch a wrong status or Content-Type (for example, expect `application/problem+json` for `xml`)
   - GREEN: the cases. Discovery mounts `Handler.Discovery()` on a `ServeMux` exactly as `internal/paritytest` does. The 304 case reads the `ETag` from one request made before the loop.
   - REFACTOR: Extract Function for the shared request construction, then /simplify
-- [x] 2.2 Add the core micro-benchmarks `BenchmarkResolve` (mapped, fallback), `BenchmarkRespond` (json, xml), `BenchmarkNegotiate` (empty, browser, xml, malformed Accept) and `BenchmarkResolveType` (resolved, kept, invalid, undocumented), next to `BenchmarkIsSubtype`; verify the smoke run passes
+- [x] 2.2 Add the core micro-benchmarks `BenchmarkResolve` (mapped, fallback), `BenchmarkRespond` (json, xml), `BenchmarkNegotiate` (empty, browser, xml, malformed Accept) and `BenchmarkResolveType` (resolved, kept, invalid, undocumented), next to `BenchmarkIsSubtype`. `BenchmarkRespond` and `BenchmarkNegotiate` replace the earlier `BenchmarkRespond_JSON` and `BenchmarkRespond_XML`. Verify the smoke run passes
   - RED: each sub-benchmark asserts its result once before the loop (resolved status, negotiated media type, resolved type); confirm one wrong expectation fails
   - GREEN: the benchmarks, internal ones in the core's internal test files
   - REFACTOR: name the shared fixtures, then /simplify
@@ -48,8 +48,8 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 ## 4. Slice: fiber request-path benchmarks
 
-- [x] 4.1 Add `BenchmarkErrorHandler` in `fiberprblm` with every case of design D3, driving `app.Handler()` with a fresh `fasthttp.RequestCtx` per iteration, copied from a request built once (design D2); verify `go test -run '^$' -bench BenchmarkErrorHandler -benchtime 1x` passes in `fiberprblm`
-  - RED: each case's pre-loop assertion shown to catch a wrong expectation. Add a smoke check that runs the same case twice and compares the results, proving no state leaks between iterations.
+- [x] 4.1 Add `BenchmarkErrorHandler` in `fiberprblm` with every case of design D3, driving `app.Handler()` with one reused `fasthttp.RequestCtx` whose response is reset and into which a request built once is copied before every request, as fasthttp does on a kept-alive connection, so context initialization is not counted (design D2); verify `go test -run '^$' -bench BenchmarkErrorHandler -benchtime 1x` passes in `fiberprblm`
+  - RED: each case's pre-loop assertion shown to catch a wrong expectation. Add a smoke check that runs the same case twice and compares the results, proving no state leaks between iterations (strengthened in 7.1 to compare against a freshly initialized context).
   - GREEN: the benchmark. `github.com/valyala/fasthttp` becomes a direct requirement of `fiberprblm` (already in the graph through fiber); confirm with `go mod tidy` that no new module is added.
   - REFACTOR: Extract Function for the request-context setup, then /simplify
 - [x] 4.2 Add the README "Performance → fiber" subsection and the fiber commands in BENCHMARKS.md; verify the commands run as written
@@ -68,9 +68,24 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 ## 6. Slice: final results published and smoke-tested in CI
 
-- [ ] 6.1 **(idle machine)** Run the D4 protocol once more for all three modules on the final code, commit the raw files, and replace the README tables with the final `benchstat` output (baseline next to prblm per adapter); verify every table names machine, OS, Go version and SHA
-- [x] 6.2 Add the benchmark smoke step to `.github/workflows/ci.yml` for the core, `ginprblm` and `fiberprblm` (`go test -run '^$' -bench . -benchtime 1x ./...`, design D7); verify it passes locally with the same command, and that CI time grows by seconds, not minutes
+- [ ] 6.1 **(idle machine)** Run the D4 protocol once more for all three modules on the final code, commit the raw files, and replace the README tables with the final `benchstat` output (baseline next to prblm per adapter); verify every table names machine, OS, Go version, module versions and SHA
+- [x] 6.2 Add the benchmark smoke step to `.github/workflows/ci.yml` for the core, `ginprblm` and `fiberprblm` (`go test -run '^$' -bench . -benchtime 1x ./...`, design D7); verify it passes locally with the same command, and that CI time grows by seconds, not minutes (the `GOWORK=off` run for the adapters is added in 7.6)
 - [ ] 6.3 Verify the change end to end: every module's suites with `-race`, `GOWORK=off` for the published modules, lint clean, `go_vulncheck` shows no new findings, and no `go.mod` gains a new module
+
+## 7. Review fixes
+
+Found by verifying and reviewing the code tasks above. Each strengthened check is first shown to fail on the defect it targets (RED), then restored.
+
+- [ ] 7.1 fiber leak check (design D2): `expectResponse` in `fiberprblm/bench_test.go` compares the response of a freshly initialized `RequestCtx` with the response of the reused context after it served a different request (the 200 that supplies the ETag, or another request); verify the smoke run passes
+  - RED: temporarily delete `s.ctx.Response.Reset()` from `serve` and confirm the new comparison (not only the 304 expectation) fails; restore it
+- [ ] 7.2 net/http parity (design D2): `newWrapServer` in the core's `bench_test.go` builds the route as `h.Recover(h.Wrap(...))`, as `internal/paritytest` does, and its comment says so; verify the smoke run passes
+- [ ] 7.3 Stronger pre-loop assertions (design D2, D3) in all three adapters: `discovery-304` asserts an empty body, and `fallback-500` asserts the body does not contain the error's text (`hunter2`); verify the smoke runs pass
+  - RED: in each adapter, confirm a wrong expectation (a non-empty 304 body expected, the error text expected absent from a body that contains it) fails the smoke run; restore it
+- [ ] 7.4 `BenchmarkNegotiate` gains the `*/*` and `application/json` Accept cases; BENCHMARKS.md lists them; verify the smoke run passes
+  - RED: a wrong expected media type for a new case fails; restore it
+- [ ] 7.5 BENCHMARKS.md step 1 records the module versions (`GOWORK=off go list -m` of `github.com/kartaladev/prblm` and the framework, in each adapter's directory), step 2 says adapter tables measure the released core in their `go.mod` and are re-measured after a core release, and the README "Performance" intro names machine, OS, Go version, module versions and commit (design D4); verify the commands run as written
+- [ ] 7.6 CI (design D7): the benchmark smoke step also runs with `GOWORK=off` for `ginprblm` and `fiberprblm`; verify the same commands pass locally in seconds
+- [ ] 7.7 Verify section 7 end to end: `gofmt -l`, `go vet`, `golangci-lint run`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff` and the smoke runs (workspace and `GOWORK=off` for the adapters) clean in the core, `ginprblm`, `fiberprblm` and `internal/paritytest`; `openspec validate add-benchmarks --strict` passes
 
 ## Workflow follow-up
 
