@@ -15,7 +15,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 ## 1. Slice: one net/http request-path benchmark, measured and published
 
-- [ ] 1.1 Add `BenchmarkWrap` with the `baseline` and `mapped-json` cases (design D2, D3); verify `go test -run '^$' -bench BenchmarkWrap -benchtime 1x -benchmem` passes in the core
+- [x] 1.1 Add `BenchmarkWrap` with the `baseline` and `mapped-json` cases (design D2, D3); verify `go test -run '^$' -bench BenchmarkWrap -benchtime 1x -benchmem` passes in the core
   - RED: write the case table and the pre-loop assertion, then temporarily expect 500 for `mapped-json` and confirm the smoke run fails with the assertion's message
   - GREEN: the `discardWriter` (header map cleared per iteration), requests built before `b.Loop()`, `b.ReportAllocs()`, and the status and byte count written to a package-level sink
   - REFACTOR: look for Duplicated Code between the case setup and the parity test's configuration (Extract Function `benchOptions()`), then /simplify
