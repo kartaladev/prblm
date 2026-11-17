@@ -48,7 +48,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 ## 4. Slice: fiber request-path benchmarks
 
-- [ ] 4.1 Add `BenchmarkErrorHandler` in `fiberprblm` with every case of design D3, driving `app.Handler()` with a fresh `fasthttp.RequestCtx` per iteration, copied from a request built once (design D2); verify `go test -run '^$' -bench BenchmarkErrorHandler -benchtime 1x` passes in `fiberprblm`
+- [x] 4.1 Add `BenchmarkErrorHandler` in `fiberprblm` with every case of design D3, driving `app.Handler()` with a fresh `fasthttp.RequestCtx` per iteration, copied from a request built once (design D2); verify `go test -run '^$' -bench BenchmarkErrorHandler -benchtime 1x` passes in `fiberprblm`
   - RED: each case's pre-loop assertion shown to catch a wrong expectation. Add a smoke check that runs the same case twice and compares the results, proving no state leaks between iterations.
   - GREEN: the benchmark. `github.com/valyala/fasthttp` becomes a direct requirement of `fiberprblm` (already in the graph through fiber); confirm with `go mod tidy` that no new module is added.
   - REFACTOR: Extract Function for the request-context setup, then /simplify
