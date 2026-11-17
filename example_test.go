@@ -192,16 +192,23 @@ func ExampleReceived() {
 		return &r.Problem
 	})
 
-	// To pass an upstream 4xx status through with the application's own
+	// To pass an upstream 404, 409 or 422 through with the application's own
 	// detail, register a consumer mapper for received problems. Nothing the
 	// upstream wrote reaches the client.
 	mapped := prblm.NewHandler(prblm.WithMappers(
 		prblm.As(func(r *prblm.Received) *prblm.Problem {
-			if s := r.Problem.Status; s >= 400 && s < 500 {
-				return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+			if r == nil {
+				return nil // the default 502
 			}
 
-			return nil // the default 502
+			// Only statuses about the resource itself: 401, 403, 405, 407 and 429
+			// describe this service's access to the upstream and stay 502.
+			switch s := r.Problem.Status; s {
+			case http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
+				return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+			default:
+				return nil // the default 502
+			}
 		}),
 	))
 	passThrough := mapped.Wrap(fetchVessel)

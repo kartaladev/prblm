@@ -45,18 +45,29 @@ var ErrNotProblem = errors.New("prblm: response is not a problem")
 //
 // To relay the upstream problem as it is, detail and extension members
 // included, return &r.Problem: it is a deliberate choice, made at the call
-// site, to pass on what the other service wrote.
+// site, to pass on what the other service wrote. A relative upstream type
+// is then resolved against this service's namespace (see [WithNamespace]),
+// which may not document it; resolve it against the upstream URL first if
+// needed.
 //
-// To answer with an upstream 4xx status but none of its content, register a
-// consumer mapper for received problems that gives the application's own
-// detail (see the example):
+// To answer with an upstream status such as 404 but none of its content,
+// register a consumer mapper for received problems that gives the
+// application's own detail for an explicit list of statuses (see the
+// example):
 //
 //	prblm.As(func(r *prblm.Received) *prblm.Problem {
-//		if s := r.Problem.Status; s >= 400 && s < 500 {
-//			return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+//		if r == nil {
+//			return nil // the default 502
 //		}
 //
-//		return nil // the default 502
+//		// Only statuses about the resource itself: 401, 403, 405, 407 and 429
+//		// describe this service's access to the upstream and stay 502.
+//		switch s := r.Problem.Status; s {
+//		case http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
+//			return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+//		default:
+//			return nil // the default 502
+//		}
 //	})
 type Received struct { //nolint:errname // named for where the problem came from, not for being an error
 	// Problem is the problem as the other service sent it.
