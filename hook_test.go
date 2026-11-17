@@ -374,6 +374,33 @@ func TestHooks_Misuse(t *testing.T) {
 	})
 }
 
+// error-mapping / Scenario: Replaced and added hooks (Examples: misuse,
+// AddErrorHook(nil)). With no non-nil hook a handler reports nothing, so
+// nobody builds a note that nobody reads.
+func TestAddErrorHook_NilIsNotReporting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []prblm.Option
+		want bool
+	}{
+		{name: "no hooks"},
+		{name: "nil added hook", opts: []prblm.Option{prblm.AddErrorHook(nil)}},
+		{name: "added hook", opts: []prblm.Option{prblm.AddErrorHook(func(context.Context, error, *prblm.Problem) {})}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := prblm.IsReporting(t.Context(), prblm.NewHandler(tt.opts...)); got != tt.want {
+				t.Errorf("isReporting = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 // error-mapping / Scenario: A panicking hook does not silence the others.
 func TestHooks_Panic(t *testing.T) {
 	t.Parallel()
@@ -461,8 +488,8 @@ func TestHooks_Notes(t *testing.T) {
 			event: discoverUnknown,
 		},
 		{
-			// Not a spec row: a plain discovery 404 reports nothing at all,
-			// so this row makes the silent request produce a note first.
+			// A plain discovery 404 reports nothing at all, so this row
+			// makes the silent request produce a note first.
 			name: "discovery 404 with a panicking enricher",
 			opts: []prblm.Option{
 				prblm.WithNamespace("/problems"),
