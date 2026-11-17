@@ -2,11 +2,11 @@
 
 ## 1. Slice: sibling test helpers decode problems without `Parse`, green against core v0.1.0 and the local core
 
-- [ ] 1.1 Replace `prblm.Parse` in the test helpers of `ginprblm`, `fiberprblm`, `gormmap`, `pgxmap` and `validatormap` with a decoder that picks `encoding/json` or `encoding/xml` by `Content-Type` and fails the test for anything else; verify `go test -race ./...` (workspace) and `GOWORK=off go test ./...` pass in each of these modules
+- [x] 1.1 Replace `prblm.Parse` in the test helpers of `ginprblm`, `fiberprblm`, `gormmap`, `pgxmap` and `validatormap` with a decoder that picks `encoding/json` or `encoding/xml` by `Content-Type` and fails the test for anything else; verify `go test -race ./...` (workspace) and `GOWORK=off go test ./...` pass in each of these modules
   - RED: none; behavior is unchanged (a preparatory refactoring). The existing tests are the safety net and must stay green before and after the change.
   - GREEN: one `decodeProblem(t, res)` helper per module, replacing each `prblm.Parse` call. Use gopls `go_symbol_references` on `Parse` to find every call.
   - REFACTOR: look for Duplicated Code between the helpers in the same module (Extract Function), then /simplify
-- [ ] 1.2 Verify slice 1: `GOWORK=off go mod tidy -diff`, `go vet`, `golangci-lint` and both test modes are clean in every touched module, and `grep -rn "prblm.Parse(" --include=*_test.go` shows calls only in the core module
+- [x] 1.2 Verify slice 1: `GOWORK=off go mod tidy -diff`, `go vet`, `golangci-lint` and both test modes are clean in every touched module, and `grep -rn "prblm.Parse(" --include=*_test.go` shows calls only in the core module
 
 ## 2. Slice: `Parse` returns `*Received`, which reports `ErrBadGateway`, end to end through net/http
 
@@ -56,4 +56,5 @@
 
 - Close issue #8 from the PR that merges slice 2.
 - Ask before tagging core v0.2.0. Each sibling module then moves to it in its own release.
+- When a sibling module moves to core v0.2.0, its `decodeProblem` test helper can go back to `prblm.Parse` (`r, err := prblm.Parse(res)`, then `&r.Problem`).
 - Archive the change after review.
