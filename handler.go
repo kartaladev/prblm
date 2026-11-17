@@ -293,10 +293,9 @@ func (h *Handler) isReporting(ctx context.Context) bool {
 }
 
 // callHook calls the OnError hook, if any, and then the added hooks, in
-// order. The caller has checked isReporting. A hook that panics is ignored.
+// order. The caller has checked isReporting. A hook that panics is ignored,
+// and the hooks after it are still called.
 func (h *Handler) callHook(ctx context.Context, err error, p *Problem) {
-	defer func() { _ = recover() }()
-
 	if h.onError != nil {
 		callOne(ctx, h.onError, err, p)
 	}
@@ -306,8 +305,13 @@ func (h *Handler) callHook(ctx context.Context, err error, p *Problem) {
 	}
 }
 
-// callOne calls one hook with the report.
+// callOne calls one hook with the report and ignores its panic, whatever
+// the value, http.ErrAbortHandler included: a hook runs outside the
+// application's control flow, so it cannot abort the response, and there is
+// nowhere left to report the panic.
 func callOne(ctx context.Context, hook func(context.Context, error, *Problem), err error, p *Problem) {
+	defer func() { _ = recover() }()
+
 	hook(ctx, err, p)
 }
 

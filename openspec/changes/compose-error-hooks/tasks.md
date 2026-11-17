@@ -10,7 +10,7 @@
   - RED: `TestHooks_Misuse` with the four misuse rows. `AddErrorHook(nil)` panics with a nil call before the fix, or adds a nil entry. Confirm the failure.
   - GREEN: `AddErrorHook` ignores nil. `OnError` stays unchanged.
   - REFACTOR: none expected; /simplify
-- [ ] 1.3 Each hook isolated from a panicking one (error-mapping / Scenario: A panicking hook does not silence the others); verify `go test -race -run TestHooks_Panic ./` passes
+- [x] 1.3 Each hook isolated from a panicking one (error-mapping / Scenario: A panicking hook does not silence the others); verify `go test -race -run TestHooks_Panic ./` passes
   - RED: `TestHooks_Panic` with the four rows: `"boom"`, `nil` (`*runtime.PanicNilError`) and `http.ErrAbortHandler`, with the panicking hook first, in the middle and last. It asserts the 409 response and the order of the recording hooks. The middle and first rows fail with a single shared `recover`.
   - GREEN: a `defer recover` per hook call (`callOne`).
   - REFACTOR: check that `safeCall` and `callHook` share no duplicated recovery (Extract Function only if both read better), then /simplify

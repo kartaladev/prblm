@@ -391,3 +391,80 @@ func TestHooks_Misuse(t *testing.T) {
 		},
 	})
 }
+
+// error-mapping / Scenario: A panicking hook does not silence the others.
+func TestHooks_Panic(t *testing.T) {
+	t.Parallel()
+
+	// panicking returns a hook that panics with value, nil included.
+	panicking := func(value any) func(context.Context, error, *prblm.Problem) {
+		return func(context.Context, error, *prblm.Problem) { panic(value) }
+	}
+
+	tests := []struct {
+		opts  func(l *callLog, p func(context.Context, error, *prblm.Problem)) []prblm.Option
+		value any
+		name  string
+		calls []string
+	}{
+		{
+			name:  "OnError hook panics first",
+			value: "boom",
+			opts: func(l *callLog, p func(context.Context, error, *prblm.Problem)) []prblm.Option {
+				return []prblm.Option{prblm.OnError(p), prblm.AddErrorHook(l.hook("B"))}
+			},
+			calls: []string{"B"},
+		},
+		{
+			name:  "added hook panics in the middle",
+			value: "boom",
+			opts: func(l *callLog, p func(context.Context, error, *prblm.Problem)) []prblm.Option {
+				return []prblm.Option{prblm.OnError(l.hook("A")), prblm.AddErrorHook(p), prblm.AddErrorHook(l.hook("C"))}
+			},
+			calls: []string{"A", "C"},
+		},
+		{
+			name:  "last hook panics with nil",
+			value: nil,
+			opts: func(l *callLog, p func(context.Context, error, *prblm.Problem)) []prblm.Option {
+				return []prblm.Option{prblm.AddErrorHook(l.hook("B")), prblm.AddErrorHook(p)}
+			},
+			calls: []string{"B"},
+		},
+		{
+			name:  "added hook panics with ErrAbortHandler",
+			value: http.ErrAbortHandler,
+			opts: func(l *callLog, p func(context.Context, error, *prblm.Problem)) []prblm.Option {
+				return []prblm.Option{prblm.OnError(l.hook("A")), prblm.AddErrorHook(p), prblm.AddErrorHook(l.hook("C"))}
+			},
+			calls: []string{"A", "C"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var l callLog
+
+			opts := append(tt.opts(&l, panicking(tt.value)), prblm.WithMappers(prblm.Status(errVesselNotFound, 409)))
+			rec := write(t, prblm.NewHandler(opts...), errVesselNotFound)
+
+			if rec.Code != 409 {
+				t.Errorf("status = %d, want 409", rec.Code)
+			}
+
+			calls := l.recorded()
+			if got := names(calls); !slices.Equal(got, tt.calls) {
+				t.Fatalf("hooks called %v, want %v", got, tt.calls)
+			}
+
+			for _, c := range calls {
+				//nolint:errorlint // each hook must receive the original error value itself.
+				if c.err != errVesselNotFound {
+					t.Errorf("hook %s got %v, want %v", c.name, c.err, errVesselNotFound)
+				}
+			}
+		})
+	}
+}
