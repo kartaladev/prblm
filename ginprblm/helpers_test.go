@@ -2,9 +2,13 @@ package ginprblm_test
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -74,24 +78,58 @@ func get(t *testing.T, target string) *http.Request {
 	return httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, http.NoBody)
 }
 
-// parse decodes the problem in res, failing the test when it is not one.
-// Parse closes the body.
-func parse(t *testing.T, res *http.Response) *prblm.Problem {
+// decodeProblem decodes the problem in res, failing the test when it is not
+// one. It closes the body.
+func decodeProblem(t *testing.T, res *http.Response) *prblm.Problem {
 	t.Helper()
 
-	p, err := prblm.Parse(res)
+	p, err := readProblem(res)
 	if err != nil {
-		t.Fatalf("Parse: %v", err)
+		t.Fatalf("decode problem: %v", err)
 	}
 
 	return p
 }
 
-// parseRecorded decodes the problem recorded in rec; Parse closes the body.
-func parseRecorded(t *testing.T, rec *httptest.ResponseRecorder) *prblm.Problem {
+// decodeRecorded decodes the problem recorded in rec.
+func decodeRecorded(t *testing.T, rec *httptest.ResponseRecorder) *prblm.Problem {
 	t.Helper()
 
-	return parse(t, rec.Result())
+	return decodeProblem(t, rec.Result())
+}
+
+// readProblem decodes the problem document in res with encoding/json or
+// encoding/xml, chosen by its Content-Type, and closes the body. It returns
+// an error for any other media type. It doesn't use prblm.Parse, whose result
+// type differs between core versions, so the tests build against the
+// released core and the local one alike.
+func readProblem(res *http.Response) (*prblm.Problem, error) {
+	defer func() { _ = res.Body.Close() }()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var unmarshal func([]byte, any) error
+
+	contentType := res.Header.Get("Content-Type")
+
+	switch mediaType, _, _ := mime.ParseMediaType(contentType); mediaType {
+	case "application/problem+json":
+		unmarshal = json.Unmarshal
+	case "application/problem+xml":
+		unmarshal = xml.Unmarshal
+	default:
+		return nil, fmt.Errorf("content type %q is not a problem document (body %q)", contentType, body)
+	}
+
+	var p prblm.Problem
+	if err := unmarshal(body, &p); err != nil {
+		return nil, fmt.Errorf("decode %q: %w", body, err)
+	}
+
+	return &p, nil
 }
 
 // do sends req to srv and returns the response as a recorder, with the

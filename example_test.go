@@ -139,7 +139,7 @@ func ExampleParse() {
 		return
 	}
 
-	p, err := prblm.Parse(res) // closes the body
+	r, err := prblm.Parse(res) // closes the body
 	if errors.Is(err, prblm.ErrNotProblem) {
 		fmt.Println("not a problem response")
 
@@ -152,9 +152,77 @@ func ExampleParse() {
 		return
 	}
 
-	fmt.Println(p.Status, p.Title, p.Instance)
+	fmt.Println(r.Problem.Status, r.Problem.Title, r.Problem.Instance)
 	// Output:
 	// 404 Not Found /v1/vessels/7
+}
+
+func ExampleReceived() {
+	// An upstream service answers with a problem that names its internals.
+	upstream := func() *http.Response {
+		rec := httptest.NewRecorder()
+		rec.Header().Set("Content-Type", "application/problem+json")
+		rec.WriteHeader(http.StatusNotFound)
+		_, _ = rec.WriteString(`{"status":404,"title":"Not Found","detail":"vessel 7 missing in db shard-3","table":"vessels_shard3"}`)
+
+		return rec.Result()
+	}
+
+	h := prblm.NewHandler()
+
+	// A gateway returns what it received: the client gets a safe 502, and
+	// the OnError hook gets the error, upstream problem included, to log.
+	fetchVessel := func(http.ResponseWriter, *http.Request) error {
+		r, err := prblm.Parse(upstream()) //nolint:bodyclose // Parse closes the body.
+		if err != nil {
+			return fmt.Errorf("%w: %w", prblm.ErrBadGateway, err)
+		}
+
+		return fmt.Errorf("load vessel 7: %w", r)
+	}
+	gateway := h.Wrap(fetchVessel)
+
+	// Relaying the upstream problem as it is takes a deliberate &r.Problem.
+	relay := h.Wrap(func(http.ResponseWriter, *http.Request) error {
+		r, err := prblm.Parse(upstream()) //nolint:bodyclose // Parse closes the body.
+		if err != nil {
+			return fmt.Errorf("%w: %w", prblm.ErrBadGateway, err)
+		}
+
+		return &r.Problem
+	})
+
+	// To pass an upstream 404, 409 or 422 through with the application's own
+	// detail, register a consumer mapper for received problems. Nothing the
+	// upstream wrote reaches the client.
+	mapped := prblm.NewHandler(prblm.WithMappers(
+		prblm.As(func(r *prblm.Received) *prblm.Problem {
+			if r == nil {
+				return nil // the default 502
+			}
+
+			// Only statuses about the resource itself: 401, 403, 405, 407 and 429
+			// describe this service's access to the upstream and stay 502.
+			switch s := r.Problem.Status; s {
+			case http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
+				return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+			default:
+				return nil // the default 502
+			}
+		}),
+	))
+	passThrough := mapped.Wrap(fetchVessel)
+
+	for _, handler := range []http.Handler{gateway, relay, passThrough} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/vessels/7", http.NoBody))
+
+		fmt.Println(rec.Code, rec.Body.String())
+	}
+	// Output:
+	// 502 {"title":"Bad Gateway","status":502,"detail":"An upstream service returned an invalid response.","instance":"/vessels/7"}
+	// 404 {"title":"Not Found","status":404,"detail":"vessel 7 missing in db shard-3","instance":"/vessels/7","table":"vessels_shard3"}
+	// 404 {"title":"Not Found","status":404,"detail":"The vessel service rejected the request.","instance":"/vessels/7"}
 }
 
 func ExampleNew() {

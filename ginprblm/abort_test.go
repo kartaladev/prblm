@@ -131,7 +131,7 @@ func TestMiddleware_AbortWithError(t *testing.T) {
 				t.Errorf("body %q leaks the error text %q", body, tt.hidden)
 			}
 
-			if p := parseRecorded(t, rec); p.Detail != tt.detail {
+			if p := decodeRecorded(t, rec); p.Detail != tt.detail {
 				t.Errorf("detail = %q, want %q", p.Detail, tt.detail)
 			}
 		})
@@ -189,7 +189,7 @@ func TestMiddleware_StatusOnly(t *testing.T) {
 				t.Errorf("Content-Type = %q, want application/problem+json", ct)
 			}
 
-			if p := parseRecorded(t, rec); p.Title != tt.title {
+			if p := decodeRecorded(t, rec); p.Title != tt.title {
 				t.Errorf("title = %q, want %q", p.Title, tt.title)
 			}
 		})

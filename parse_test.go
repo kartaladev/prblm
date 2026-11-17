@@ -41,6 +41,105 @@ type failingReader struct{}
 
 func (failingReader) Read([]byte) (int, error) { return 0, errRead }
 
+// problem-document / Scenario: Received problem as an error.
+func TestReceived_Error(t *testing.T) {
+	t.Parallel()
+
+	if _, describes := any((*prblm.Received)(nil)).(prblm.Describer); describes {
+		t.Error("a received problem describes itself")
+	}
+
+	tests := []struct {
+		name     string
+		received *prblm.Received
+		message  string
+	}{
+		{
+			name:     "held 404 with detail",
+			received: &prblm.Received{Problem: prblm.Problem{Status: 404, Title: "Not Found", Detail: "vessel 7 missing in db shard-3"}},
+			message:  "prblm: received problem: Not Found: vessel 7 missing in db shard-3",
+		},
+		{name: "empty held problem", received: &prblm.Received{}, message: "prblm: received problem: problem status 0"},
+		{name: "nil received problem", received: nil, message: "<nil received problem>"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.received.Error(); got != tt.message {
+				t.Errorf("Error() = %q, want %q", got, tt.message)
+			}
+		})
+	}
+}
+
+// error-sentinels / Scenario: errors.Is on a received problem.
+func TestReceived_Is(t *testing.T) {
+	t.Parallel()
+
+	held := func(status int) *prblm.Received { return &prblm.Received{Problem: prblm.Problem{Status: status}} }
+
+	tests := []struct {
+		name   string
+		err    error
+		target error
+		want   bool
+	}{
+		{name: "held 404 is a bad gateway", err: held(404), target: prblm.ErrBadGateway, want: true},
+		{name: "wrapped, held 503 is a bad gateway", err: fmt.Errorf("op: %w", held(503)), target: prblm.ErrBadGateway, want: true},
+		{name: "held 404 is not a not found", err: held(404), target: prblm.ErrNotFound, want: false},
+		{name: "held 503 is not unavailable", err: held(503), target: prblm.ErrUnavailable, want: false},
+		{name: "held status 0 is a bad gateway", err: held(0), target: prblm.ErrBadGateway, want: true},
+		{name: "nil received problem is a bad gateway", err: (*prblm.Received)(nil), target: prblm.ErrBadGateway, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := errors.Is(tt.err, tt.target); got != tt.want {
+				t.Errorf("errors.Is(%v, %v) = %t, want %t", tt.err, tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestReceived_As pins how client code takes a received problem out of an
+// error chain: through *Received, then its Problem field. A *Problem target
+// no longer matches a Parse result, which the CHANGELOG migration notes say.
+func TestReceived_As(t *testing.T) {
+	t.Parallel()
+
+	wrapped := fmt.Errorf("call: %w", receivedProblem(t))
+
+	t.Run("received target matches", func(t *testing.T) {
+		t.Parallel()
+
+		target, ok := errors.AsType[*prblm.Received](wrapped)
+		if !ok {
+			t.Fatal("errors.AsType[*Received] = false, want true")
+		}
+
+		got := target.Problem
+		if got.Status != 404 || got.Title != "Not Found" || got.Detail != "vessel 7 missing in db shard-3" {
+			t.Errorf("target.Problem = %d %q %q, want 404 %q %q", got.Status, got.Title, got.Detail, "Not Found", "vessel 7 missing in db shard-3")
+		}
+
+		if v, ok := got.Ext("table"); !ok || v != "vessels_shard3" {
+			t.Errorf(`target.Problem.Ext("table") = %v, %t, want "vessels_shard3", true`, v, ok)
+		}
+	})
+
+	t.Run("problem target does not match", func(t *testing.T) {
+		t.Parallel()
+
+		if p, ok := errors.AsType[*prblm.Problem](wrapped); ok {
+			t.Errorf("errors.AsType[*Problem] = true with %v, want false", p)
+		}
+	})
+}
+
 // problem-document / Scenario: Parse response.
 func TestParse(t *testing.T) {
 	t.Parallel()
@@ -94,22 +193,22 @@ func TestParse(t *testing.T) {
 				res.Header.Set("Content-Type", tt.contentType)
 			}
 
-			p, err := prblm.Parse(res)
+			r, err := prblm.Parse(res)
 
 			if !body.closed {
 				t.Error("body not closed")
 			}
 
 			if tt.refused != nil {
-				if p != nil || !tt.refused(err) {
-					t.Errorf("Parse() = %+v, %v; want the refusal", p, err)
+				if r != nil || !tt.refused(err) {
+					t.Errorf("Parse() = %+v, %v; want the refusal", r, err)
 				}
 
 				return
 			}
 
-			if err != nil || p == nil || p.Status != tt.status {
-				t.Errorf("Parse() = %+v, %v; want status %d", p, err, tt.status)
+			if err != nil || r == nil || r.Problem.Status != tt.status {
+				t.Errorf("Parse() = %+v, %v; want a received problem holding status %d", r, err, tt.status)
 			}
 		})
 	}
@@ -131,8 +230,8 @@ func TestParse_Nil(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if p, err := prblm.Parse(tt.res); p != nil || err == nil {
-				t.Errorf("Parse() = %+v, %v; want an error", p, err)
+			if r, err := prblm.Parse(tt.res); r != nil || err == nil {
+				t.Errorf("Parse() = %+v, %v; want an error", r, err)
 			}
 		})
 	}
@@ -245,10 +344,12 @@ func checkEndToEnd(t *testing.T, srv *httptest.Server, accept string, tt endToEn
 		t.Errorf("got %d, Retry-After %q; want %d, %q", res.StatusCode, res.Header.Get("Retry-After"), tt.status, tt.retryAfter)
 	}
 
-	p, err := prblm.Parse(res)
+	r, err := prblm.Parse(res)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
+
+	p := &r.Problem
 
 	if p.Status != tt.status || p.Detail != tt.detail || p.Instance != tt.path {
 		t.Errorf("parsed status %d, detail %q, instance %q; want %d, %q, %q", p.Status, p.Detail, p.Instance, tt.status, tt.detail, tt.path)

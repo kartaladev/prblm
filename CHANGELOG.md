@@ -10,6 +10,36 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- `Parse` returns a `*Received` instead of a `*Problem`. `Received` holds the decoded problem in
+  its `Problem` field. It is an error, but not a `Describer`, and it reports `ErrBadGateway`
+  through `errors.Is`, so `errors.Is(err, prblm.ErrBadGateway)` is now true for an error that
+  wraps a received problem. To migrate, read the problem through the field:
+
+  ```go
+  // Before
+  p, err := prblm.Parse(res)
+  fmt.Println(p.Status)
+
+  // After
+  r, err := prblm.Parse(res)
+  fmt.Println(r.Problem.Status) // or p := &r.Problem
+  ```
+
+  Client code that takes a `Parse` result out of an error chain with `errors.As(err, &p)`, where
+  `p` is a `*prblm.Problem`, no longer matches: a `*Received` doesn't unwrap to its problem. Use
+  `r *prblm.Received` as the target, then read `r.Problem`.
+
+### Fixed
+
+- Received problems no longer leak (#8). A problem from `Parse` in an error chain, even inside an
+  outer sentinel such as `fmt.Errorf("%w: %w", prblm.ErrBadGateway, r)`, used to answer with the
+  upstream's status, detail and extension members. It now resolves like `ErrBadGateway`, a safe
+  502, under the usual sentinel rules (see the `Received` godoc). Relaying it is an explicit
+  `return &r.Problem`. The godoc of `Problem.UnmarshalJSON` and `Problem.UnmarshalXML` warns that
+  a problem decoded by hand still describes itself.
+
 ## [0.1.0] - 2026-11-16
 
 The first release.

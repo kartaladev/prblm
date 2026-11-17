@@ -347,6 +347,12 @@ func (p Problem) wireType() string {
 // decoded as [json.Number], so no precision is lost. Extension names from a
 // decoded document are not validated, since they come from another party.
 // Input that is not a single JSON object is an error.
+//
+// A problem decoded this way is a [*Problem], which describes itself: a
+// handler that returns it, or an error that wraps it, answers with it as it
+// is, detail and extension members included. To read a response from
+// another service, use [Parse], which returns a [*Received] that never
+// reaches the client unless the application relays it.
 func (p *Problem) UnmarshalJSON(data []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
@@ -443,6 +449,10 @@ func (p Problem) MarshalXML(e *xml.Encoder, _ xml.StartElement) error {
 // as written, except that the status may be surrounded by whitespace;
 // attributes and comments are ignored. An element other than problem is an
 // error; its namespace is not checked.
+//
+// Like a problem from [Problem.UnmarshalJSON], a problem decoded this way
+// describes itself and is answered as it is when a handler returns it. Use
+// [Parse] for a response from another service.
 func (p *Problem) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	if start.Name.Local != "problem" {
 		return fmt.Errorf("prblm: decoding problem: root element is %q, not problem", start.Name.Local)

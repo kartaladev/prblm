@@ -2,8 +2,12 @@ package fiberprblm_test
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -111,12 +115,54 @@ func problemOf(t *testing.T, r response) *prblm.Problem {
 		Body:       io.NopCloser(strings.NewReader(r.body)),
 	}
 
-	p, err := prblm.Parse(res)
+	return decodeProblem(t, res)
+}
+
+// decodeProblem decodes the problem in res, failing the test when it is not
+// one. It closes the body.
+func decodeProblem(t *testing.T, res *http.Response) *prblm.Problem {
+	t.Helper()
+
+	p, err := readProblem(res)
 	if err != nil {
-		t.Fatalf("Parse: %v (body %q)", err, r.body)
+		t.Fatalf("decode problem: %v", err)
 	}
 
 	return p
+}
+
+// readProblem decodes the problem document in res with encoding/json or
+// encoding/xml, chosen by its Content-Type, and closes the body. It returns
+// an error for any other media type. It doesn't use prblm.Parse, whose result
+// type differs between core versions, so the tests build against the
+// released core and the local one alike.
+func readProblem(res *http.Response) (*prblm.Problem, error) {
+	defer func() { _ = res.Body.Close() }()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	var unmarshal func([]byte, any) error
+
+	contentType := res.Header.Get("Content-Type")
+
+	switch mediaType, _, _ := mime.ParseMediaType(contentType); mediaType {
+	case "application/problem+json":
+		unmarshal = json.Unmarshal
+	case "application/problem+xml":
+		unmarshal = xml.Unmarshal
+	default:
+		return nil, fmt.Errorf("content type %q is not a problem document (body %q)", contentType, body)
+	}
+
+	var p prblm.Problem
+	if err := unmarshal(body, &p); err != nil {
+		return nil, fmt.Errorf("decode %q: %w", body, err)
+	}
+
+	return &p, nil
 }
 
 // listen serves app on a real loopback listener for the test and returns a
@@ -162,14 +208,12 @@ func fetchProblem(ctx context.Context, client *http.Client, url string) (int, *p
 		return 0, nil, err
 	}
 
-	res, err := client.Do(req)
+	res, err := client.Do(req) //nolint:bodyclose // readProblem closes the body.
 	if err != nil {
 		return 0, nil, err
 	}
 
-	defer func() { _ = res.Body.Close() }()
-
-	p, err := prblm.Parse(res)
+	p, err := readProblem(res)
 
 	return res.StatusCode, p, err
 }

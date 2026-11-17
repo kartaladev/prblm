@@ -2,9 +2,12 @@ package gormmap_test
 
 import (
 	"context"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -96,12 +99,45 @@ func serve(t *testing.T, h *prblm.Handler, err error) response {
 
 	body := rec.Body.String()
 
-	p, parseErr := prblm.Parse(rec.Result())
-	if parseErr != nil {
-		t.Fatalf("Parse() error = %v, body %q", parseErr, body)
-	}
+	p := decodeProblem(t, rec.Result())
 
 	return response{problem: p, body: body, status: rec.Code}
+}
+
+// decodeProblem decodes the problem document in res with encoding/json or
+// encoding/xml, chosen by its Content-Type, and closes the body. It fails the
+// test for any other media type. It doesn't use prblm.Parse, whose result
+// type differs between core versions, so the tests build against the
+// released core and the local one alike.
+func decodeProblem(t *testing.T, res *http.Response) *prblm.Problem {
+	t.Helper()
+
+	defer func() { _ = res.Body.Close() }()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+
+	var unmarshal func([]byte, any) error
+
+	contentType := res.Header.Get("Content-Type")
+
+	switch mediaType, _, _ := mime.ParseMediaType(contentType); mediaType {
+	case "application/problem+json":
+		unmarshal = json.Unmarshal
+	case "application/problem+xml":
+		unmarshal = xml.Unmarshal
+	default:
+		t.Fatalf("Content-Type %q is not a problem document (body %q)", contentType, body)
+	}
+
+	var p prblm.Problem
+	if err := unmarshal(body, &p); err != nil {
+		t.Fatalf("decode %q: %v", body, err)
+	}
+
+	return &p
 }
 
 // handler returns a problem handler, with the default gorm mapper

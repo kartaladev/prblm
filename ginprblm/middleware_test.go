@@ -174,7 +174,7 @@ func TestMiddleware_RecordedErrors(t *testing.T) {
 				t.Errorf("Content-Type = %q, want application/problem+json", ct)
 			}
 
-			if p := parseRecorded(t, rec); p.Instance != "/v1/vessels/7" {
+			if p := decodeRecorded(t, rec); p.Instance != "/v1/vessels/7" {
 				t.Errorf("instance = %q, want /v1/vessels/7", p.Instance)
 			}
 
@@ -342,7 +342,7 @@ func TestMiddleware_EndToEnd(t *testing.T) {
 				t.Errorf("Vary = %q, want Accept", vary)
 			}
 
-			if p := parseRecorded(t, rec); p.Instance != "/v1/vessels/7" {
+			if p := decodeRecorded(t, rec); p.Instance != "/v1/vessels/7" {
 				t.Errorf("instance = %q, want /v1/vessels/7", p.Instance)
 			}
 		})
@@ -422,22 +422,20 @@ func TestMiddleware_Concurrent(t *testing.T) {
 			req := get(t, srv.URL+path)
 			req.RequestURI = ""
 
-			res, err := srv.Client().Do(req)
+			res, err := srv.Client().Do(req) //nolint:bodyclose // readProblem closes the body.
 			if err != nil {
 				t.Errorf("%s: request: %v", path, err)
 
 				return
 			}
 
-			defer func() { _ = res.Body.Close() }()
-
 			if res.StatusCode != want[path] {
 				t.Errorf("%s: status = %d, want %d", path, res.StatusCode, want[path])
 			}
 
-			p, err := prblm.Parse(res)
+			p, err := readProblem(res)
 			if err != nil {
-				t.Errorf("%s: Parse: %v", path, err)
+				t.Errorf("%s: decode problem: %v", path, err)
 
 				return
 			}
@@ -495,7 +493,7 @@ func TestMiddleware_HostHeaders(t *testing.T) {
 				req.Host = host
 			}
 
-			if got := parseRecorded(t, serve(t, engine, req)).Type; got != tt.rendered {
+			if got := decodeRecorded(t, serve(t, engine, req)).Type; got != tt.rendered {
 				t.Errorf("type = %q, want %q", got, tt.rendered)
 			}
 		})

@@ -41,6 +41,24 @@ var returned = map[string]error{
 	caseSentinel:    fmt.Errorf("vessel 7: %w", prblm.ErrNotFound),
 	// gin raises this case with its own hint, c.AbortWithError.
 	caseSentinelHint: prblm.WithStatus(prblm.ErrNotFound, http.StatusGone),
+	caseReceived:     fmt.Errorf("%w: %w", prblm.ErrBadGateway, receivedProblem()),
+}
+
+// receivedProblem returns what prblm.Parse gives for an upstream 404 whose
+// detail and extension member name the upstream's internals (issue #8).
+func receivedProblem() error {
+	res := &http.Response{
+		Header: http.Header{"Content-Type": {"application/problem+json"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"status":404,"title":"Not Found","detail":"vessel 7 missing in db shard-3","table":"vessels_shard3"}`)),
+	}
+
+	r, err := prblm.Parse(res)
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Each case is selected with the query parameter "case", which the
@@ -55,11 +73,15 @@ const (
 	// caseSentinelHint raises prblm.ErrNotFound with a 410 status hint around
 	// it, which decides over the sentinel.
 	caseSentinelHint = "sentinel-hint"
+	// caseReceived wraps a problem received from an upstream service in
+	// prblm.ErrBadGateway, as a gateway does.
+	caseReceived = "received"
 )
 
 // The paths the servers answer the cases at, and the documentation paths.
 const (
 	pathVessel      = "/v1/vessels/7"
+	pathGateway     = "/vessels/7"
 	pathContract    = "/v1/contracts/7"
 	pathTypeDoc     = "/v1/api/probs/contracts/blacklisted-supplier"
 	pathUnknownType = "/v1/api/probs/contracts/unknown"
@@ -98,6 +120,7 @@ func netHTTPServer(t *testing.T, opts []prblm.Option) string {
 	mux := http.NewServeMux()
 	mux.Handle("GET /v1/vessels/{id}", handler)
 	mux.Handle("GET /v1/contracts/{id}", handler)
+	mux.Handle("GET /vessels/{id}", handler)
 	mux.Handle("GET "+h.DiscoveryPath()+"/", h.Discovery())
 
 	return serve(t, mux)
@@ -126,6 +149,7 @@ func ginServer(t *testing.T, opts []prblm.Option) string {
 	}
 	engine.GET("/v1/vessels/:id", handler)
 	engine.GET("/v1/contracts/:id", handler)
+	engine.GET("/vessels/:id", handler)
 
 	return serve(t, engine)
 }
@@ -159,6 +183,7 @@ func fiberServer(t *testing.T, opts []prblm.Option) string {
 	}
 	app.Get("/v1/vessels/:id", handler)
 	app.Get("/v1/contracts/:id", handler)
+	app.Get("/vessels/:id", handler)
 
 	var lc net.ListenConfig
 
@@ -172,6 +197,26 @@ func fiberServer(t *testing.T, opts []prblm.Option) string {
 	t.Cleanup(func() { _ = app.Shutdown() })
 
 	return "http://" + ln.Addr().String()
+}
+
+// newServers starts a server per adapter, all built from opts, and returns
+// a client for them and their URLs by adapter name.
+func newServers(t *testing.T, opts []prblm.Option) (*http.Client, map[string]string) {
+	t.Helper()
+
+	// Idle connections are closed before the servers stop; fiber's
+	// shutdown would otherwise wait for them.
+	client := &http.Client{Transport: &http.Transport{}}
+
+	servers := map[string]string{
+		"net/http": netHTTPServer(t, opts),
+		"gin":      ginServer(t, opts),
+		"fiber":    fiberServer(t, opts),
+	}
+
+	t.Cleanup(client.CloseIdleConnections)
+
+	return client, servers
 }
 
 // observed is the part of a response the parity scenarios compare.
@@ -221,19 +266,7 @@ func fetch(t *testing.T, client *http.Client, base, path, caseName, accept strin
 func TestParity(t *testing.T) {
 	t.Parallel()
 
-	opts := newOptions()
-
-	// Idle connections are closed before the servers stop; fiber's
-	// shutdown would otherwise wait for them.
-	client := &http.Client{Transport: &http.Transport{}}
-
-	servers := map[string]string{
-		"net/http": netHTTPServer(t, opts),
-		"gin":      ginServer(t, opts),
-		"fiber":    fiberServer(t, opts),
-	}
-
-	t.Cleanup(client.CloseIdleConnections)
+	client, servers := newServers(t, newOptions())
 
 	tests := []struct {
 		name        string
@@ -301,6 +334,33 @@ func TestParity(t *testing.T) {
 				if got := fetch(t, client, servers[name], tt.path, tt.caseName, tt.accept); got != want {
 					t.Errorf("%s differs from net/http:\n got  %+v\n want %+v", name, got, want)
 				}
+			}
+		})
+	}
+}
+
+// error-mapping / Scenario: Same response in every adapter: a gateway that
+// wraps a received problem in prblm.ErrBadGateway answers the same safe 502
+// through every adapter, with nothing of the upstream problem (issue #8).
+func TestParity_Received(t *testing.T) {
+	t.Parallel()
+
+	// Zero configuration: no enricher adds members to the exact body.
+	client, servers := newServers(t, nil)
+
+	want := observed{
+		status:      http.StatusBadGateway,
+		contentType: "application/problem+json",
+		vary:        "Accept",
+		body:        `{"title":"Bad Gateway","status":502,"detail":"An upstream service returned an invalid response.","instance":"/vessels/7"}`,
+	}
+
+	for name, base := range servers {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := fetch(t, client, base, pathGateway, caseReceived, ""); got != want {
+				t.Errorf("%s sent\n got  %+v\n want %+v", name, got, want)
 			}
 		})
 	}

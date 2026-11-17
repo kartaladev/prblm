@@ -44,13 +44,13 @@ func serve(t *testing.T, h *prblm.Handler, err error) response {
 	res := rec.Result()
 	body := rec.Body.String()
 
-	p, parseErr := prblm.Parse(res)
+	r, parseErr := prblm.Parse(res)
 	if parseErr != nil {
 		t.Fatalf("Parse() error = %v, body %q", parseErr, body)
 	}
 
 	return response{
-		problem:     p,
+		problem:     &r.Problem,
 		contentType: res.Header.Get("Content-Type"),
 		body:        body,
 		status:      res.StatusCode,
@@ -391,13 +391,13 @@ func TestMapper_EndToEnd(t *testing.T) {
 			// Parse closes the body too; closing it twice is harmless.
 			t.Cleanup(func() { _ = res.Body.Close() })
 
-			p, err := prblm.Parse(res)
+			r, err := prblm.Parse(res)
 			if err != nil {
 				t.Fatalf("Parse() error = %v", err)
 			}
 
-			if res.StatusCode != tt.want || p.Status != tt.want {
-				t.Errorf("status = %d (document %d), want %d", res.StatusCode, p.Status, tt.want)
+			if res.StatusCode != tt.want || r.Problem.Status != tt.want {
+				t.Errorf("status = %d (document %d), want %d", res.StatusCode, r.Problem.Status, tt.want)
 			}
 		})
 	}

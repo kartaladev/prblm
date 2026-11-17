@@ -283,7 +283,7 @@ func TestRecovery_Edge(t *testing.T) {
 			t.Errorf("status = %d, want 500", rec.Code)
 		}
 
-		if p := parseRecorded(t, rec); p.Title != "Internal Server Error" || p.Detail != "" {
+		if p := decodeRecorded(t, rec); p.Title != "Internal Server Error" || p.Detail != "" {
 			t.Errorf("problem %q / %q, want the safe 500", p.Title, p.Detail)
 		}
 	})
@@ -321,7 +321,7 @@ func TestRecovery_EndToEnd(t *testing.T) {
 				t.Errorf("status = %d, want %d", rec.Code, tt.status)
 			}
 
-			if p := parseRecorded(t, rec); p.Status != tt.status || p.Instance != tt.path {
+			if p := decodeRecorded(t, rec); p.Status != tt.status || p.Instance != tt.path {
 				t.Errorf("problem %d %q, want %d %q", p.Status, p.Instance, tt.status, tt.path)
 			}
 		})

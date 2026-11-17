@@ -26,9 +26,10 @@ import "errors"
 // [Describer] in the chain, a scoped mapper and a consumer mapper all come
 // first, so prblm.Is(prblm.ErrNotFound, ...) replaces the default problem.
 // They match anywhere in the chain, even inside an outer sentinel, so the
-// order below is among sentinels only; and a problem from [Parse] wrapped in
-// the chain answers with its own status and detail, so don't wrap one the
-// client must not see. [WithoutBuiltins] turns them off together with the
+// order below is among sentinels only. A problem received from another
+// service, as [Parse] returns it, reports [ErrBadGateway] at its position in
+// the chain, so these rules cover it too, and nothing of it reaches the
+// client (see [Received]). [WithoutBuiltins] turns them off together with the
 // other built-ins.
 //
 // When an error matches several sentinels, the first one found wins, in the
