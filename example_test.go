@@ -139,7 +139,7 @@ func ExampleParse() {
 		return
 	}
 
-	p, err := prblm.Parse(res) // closes the body
+	r, err := prblm.Parse(res) // closes the body
 	if errors.Is(err, prblm.ErrNotProblem) {
 		fmt.Println("not a problem response")
 
@@ -152,7 +152,7 @@ func ExampleParse() {
 		return
 	}
 
-	fmt.Println(p.Status, p.Title, p.Instance)
+	fmt.Println(r.Problem.Status, r.Problem.Title, r.Problem.Instance)
 	// Output:
 	// 404 Not Found /v1/vessels/7
 }

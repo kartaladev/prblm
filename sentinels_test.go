@@ -354,6 +354,9 @@ func TestSentinels_Override(t *testing.T) {
 			err:  fmt.Errorf("%w: %w", prblm.ErrBadGateway, fmt.Errorf("upstream: %w", prblm.ErrNotFound)), expected: 410, typ: "about:blank",
 		},
 		{
+			// An application-built problem still describes itself, even
+			// inside an outer sentinel. A problem received from another
+			// service doesn't (issue #8; see TestResolve_Received).
 			name: "problem inside an outer sentinel",
 			err:  fmt.Errorf("%w: %w", prblm.ErrBadGateway, prblm.New(422)), expected: 422, typ: "about:blank",
 		},

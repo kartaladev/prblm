@@ -266,6 +266,8 @@ func (aliasError) As(target any) bool {
 func TestResolve_SelfDescribing(t *testing.T) {
 	t.Parallel()
 
+	received := &prblm.Received{Problem: prblm.Problem{Status: 404, Detail: "vessel 7 missing in db shard-3"}}
+
 	tests := []struct {
 		name     string
 		err      error
@@ -280,6 +282,10 @@ func TestResolve_SelfDescribing(t *testing.T) {
 		{name: "describer in a joined error", err: errors.Join(io.EOF, lockedError{}), expected: 422},
 		{name: "describer through an As method", err: aliasError{}, expected: 422},
 		{name: "typed nil problem", err: (*prblm.Problem)(nil), expected: 500, calls: 1},
+		// A received problem never describes itself; the problem taken out of
+		// it does (issue #8).
+		{name: "received problem", err: received, expected: 502, calls: 1},
+		{name: "problem held by a received problem", err: &received.Problem, expected: 404},
 	}
 
 	for _, tt := range tests {
@@ -301,6 +307,129 @@ func TestResolve_SelfDescribing(t *testing.T) {
 				t.Errorf("mapper called %d times, want %d", calls, tt.calls)
 			}
 		})
+	}
+}
+
+// receivedProblem returns a problem received from an upstream service, as
+// prblm.Parse returns it: a 404 whose detail and extension member name the
+// upstream's internals (issue #8).
+func receivedProblem(t *testing.T) *prblm.Received {
+	t.Helper()
+
+	res := &http.Response{
+		Header: http.Header{"Content-Type": {"application/problem+json"}},
+		Body: io.NopCloser(strings.NewReader(
+			`{"status":404,"title":"Not Found","detail":"vessel 7 missing in db shard-3","table":"vessels_shard3"}`)),
+	}
+
+	r, err := prblm.Parse(res)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	return r
+}
+
+// error-mapping / Scenario: Gateway returns a received problem.
+func TestResolve_Received(t *testing.T) {
+	t.Parallel()
+
+	const (
+		detailBadGateway = "An upstream service returned an invalid response."
+		detailNotFound   = "The requested resource was not found."
+	)
+
+	gatewayAs503 := prblm.Status(prblm.ErrBadGateway, http.StatusServiceUnavailable)
+	consumer := func(m prblm.Mapper) []prblm.Option { return []prblm.Option{prblm.WithMappers(m)} }
+
+	tests := []struct {
+		name   string
+		opts   []prblm.Option
+		scoped prblm.Mapper
+		err    func(r *prblm.Received) error // nil returns the received problem itself
+		status int
+		detail string
+		leaks  bool
+		panics int // panic notes the hook receives first
+	}{
+		// Examples: safe by default.
+		{name: "received problem", status: 502, detail: detailBadGateway},
+		{name: "wrapped", err: func(r *prblm.Received) error { return fmt.Errorf("load vessel: %w", r) }, status: 502, detail: detailBadGateway},
+		// Issue #8: before Parse returned a *Received, this was a 404 with the
+		// upstream's detail and its table member.
+		{name: "inside ErrBadGateway", err: func(r *prblm.Received) error { return fmt.Errorf("%w: %w", prblm.ErrBadGateway, r) }, status: 502, detail: detailBadGateway},
+		{name: "inside ErrNotFound", err: func(r *prblm.Received) error { return fmt.Errorf("%w: %w", prblm.ErrNotFound, r) }, status: 404, detail: detailNotFound},
+		{name: "status hint around it", err: func(r *prblm.Received) error { return prblm.WithStatus(r, 503) }, status: 503},
+		{name: "joined", err: func(r *prblm.Received) error { return errors.Join(io.EOF, r) }, status: 502, detail: detailBadGateway},
+		{name: "wrapped typed nil", err: func(*prblm.Received) error { return fmt.Errorf("op: %w", (*prblm.Received)(nil)) }, status: 502, detail: detailBadGateway},
+		{name: "built-ins disabled", opts: []prblm.Option{prblm.WithoutBuiltins()}, status: 500},
+		// Examples: consumer decides.
+		{
+			name: "consumer mapper for received problems",
+			opts: consumer(prblm.As(func(*prblm.Received) *prblm.Problem {
+				return prblm.New(http.StatusNotFound, prblm.WithDetail("Vessel not found."))
+			})),
+			err:    func(r *prblm.Received) error { return fmt.Errorf("load: %w", r) },
+			status: 404, detail: "Vessel not found.",
+		},
+		{name: "consumer mapper for ErrBadGateway", opts: consumer(gatewayAs503), status: 503},
+		{name: "scoped mapper for ErrBadGateway", scoped: gatewayAs503, status: 503},
+		{
+			name:   "consumer mapper panics",
+			opts:   consumer(prblm.As(func(*prblm.Received) *prblm.Problem { panic("mapper broke") })),
+			status: 502, detail: detailBadGateway, panics: 1,
+		},
+		{
+			name:   "consumer mapper returns nil",
+			opts:   consumer(prblm.As(func(*prblm.Received) *prblm.Problem { return nil })),
+			status: 502, detail: detailBadGateway,
+		},
+		// Examples: explicit relay.
+		{name: "relayed problem", err: func(r *prblm.Received) error { return &r.Problem }, status: 404, detail: "vessel 7 missing in db shard-3", leaks: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var hook recorder
+
+			h := prblm.NewHandler(append(tt.opts, prblm.OnError(hook.hook))...)
+
+			var returned error = receivedProblem(t)
+			if tt.err != nil {
+				returned = tt.err(receivedProblem(t))
+			}
+
+			next := h.Wrap(func(http.ResponseWriter, *http.Request) error { return returned })
+			if tt.scoped != nil {
+				next = scoped(next, tt.scoped)
+			}
+
+			rec := httptest.NewRecorder()
+			next.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/vessels/7", http.NoBody))
+
+			checkReceivedResponse(t, rec, tt.status, tt.detail, tt.leaks)
+			assertHookCalls(t, hook.recorded(), returned, tt.status, tt.panics)
+		})
+	}
+}
+
+// checkReceivedResponse checks the status, the type, the detail and the
+// presence of the upstream's table member in the JSON problem in rec.
+func checkReceivedResponse(t *testing.T, rec *httptest.ResponseRecorder, status int, detail string, leaks bool) {
+	t.Helper()
+
+	doc := decodeMembers(t, rec.Body.Bytes())
+	gotDetail, _ := doc["detail"].(string)
+	_, gotLeaks := doc["table"]
+
+	if rec.Code != status || doc["status"] != float64(status) || gotDetail != detail || gotLeaks != leaks {
+		t.Errorf("got %d %s; want status %d, detail %q, table member %t", rec.Code, rec.Body, status, detail, leaks)
+	}
+
+	if typ, ok := doc["type"]; ok && typ != "about:blank" {
+		t.Errorf("type = %v, want about:blank", typ)
 	}
 }
 

@@ -23,11 +23,42 @@ var errTooLarge = fmt.Errorf("prblm: problem body larger than %d bytes", maxPars
 // application/problem+xml.
 var ErrNotProblem = errors.New("prblm: response is not a problem")
 
+// Received is a problem that the program received from another service, as
+// [Parse] returns it. Problem holds the decoded document.
+type Received struct { //nolint:errname // named for where the problem came from, not for being an error
+	// Problem is the problem as the other service sent it.
+	Problem Problem
+}
+
+// Error returns "prblm: received problem: " followed by the held problem's
+// message (see [Problem.Error]). It is safe to call on a nil Received.
+func (r *Received) Error() string {
+	if r == nil {
+		return "<nil received problem>"
+	}
+
+	return "prblm: received problem: " + r.Problem.Error()
+}
+
+// Is reports whether target is [ErrBadGateway], whatever status the held
+// problem has and also for a nil Received: another service answered with an
+// error of its own, which this service could not use.
+func (r *Received) Is(target error) bool {
+	return target == ErrBadGateway
+}
+
 // Parse decodes the problem in res, choosing JSON or XML by its
 // Content-Type, for clients and tests of services that answer with problem
 // details. Decoding is lenient (see [Problem.UnmarshalJSON] and
 // [Problem.UnmarshalXML]), and the problem's status is the one in the
 // document, not the response status.
+//
+// The result is a [*Received], not a [*Problem]: a problem that another
+// service sent never reaches this service's client by accident. Returning
+// the received problem, or an error that wraps it, from a handler answers
+// with a safe 502 (see [Received]). To relay the other service's problem as
+// it is, detail and extension members included, return &r.Problem, which is
+// a deliberate choice to pass its content on.
 //
 // Parse consumes and always closes the body. It reads at most 1 MiB: problem
 // documents are small, and the bound keeps a misbehaving server from making
@@ -37,7 +68,7 @@ var ErrNotProblem = errors.New("prblm: response is not a problem")
 // problem document, the read error when the body cannot be read, an error
 // when the body is larger than 1 MiB, and a decode error when the body is not
 // a valid document.
-func Parse(res *http.Response) (*Problem, error) {
+func Parse(res *http.Response) (*Received, error) {
 	if res == nil {
 		return nil, errors.New("prblm: parsing a nil response")
 	}
@@ -62,12 +93,12 @@ func Parse(res *http.Response) (*Problem, error) {
 		return nil, errTooLarge
 	}
 
-	var p Problem
-	if err := decode(body, &p); err != nil {
+	var r Received
+	if err := decode(body, &r.Problem); err != nil {
 		return nil, err
 	}
 
-	return &p, nil
+	return &r, nil
 }
 
 // decoderFor returns the decoder for a problem document of contentType, or
