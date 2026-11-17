@@ -504,7 +504,10 @@ engine.GET("/v1/reports", func(c *gin.Context) {
 - `c.AbortWithError(403, err)`: the abort status is a hint, used only when no mapper or
   self-describing error recognizes `err`. A status below 400 is no hint.
 - `c.AbortWithStatus(401)`, or a status of 400 or above with no body: an `about:blank` problem
-  for that status.
+  for that status. The hooks receive an error that matches `ginprblm.ErrStatusOnly` with
+  `errors.Is`, so they can tell it apart from a handler error. A bare 5xx status is covered too,
+  so a hook should still treat a problem status of 500 or more as a failure. *(Mirrors
+  `ExampleErrStatusOnly`.)*
 - Statuses below 400, responses with a body (`c.JSON`, `c.AbortWithStatusJSON`), streams
   (flushed responses, server-sent events) and hijacked connections (websockets) are sent
   unchanged; a recorded error then only reaches the `OnError` hook.

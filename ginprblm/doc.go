@@ -37,6 +37,20 @@
 // Register [Middleware] before middleware that aborts or writes: a header
 // sent before it runs can no longer be replaced.
 //
+// For a status-only abort, the hooks receive an error that matches
+// [ErrStatusOnly] with errors.Is, so a hook can tell an expected 401 or 429
+// apart from a handler error. A status of 500 or more set without a body,
+// such as c.Status(503), is a status-only abort too, so a hook should still
+// treat it as a failure:
+//
+//	prblm.OnError(func(ctx context.Context, err error, p *prblm.Problem) {
+//		if p != nil && p.Status < 500 && errors.Is(err, ginprblm.ErrStatusOnly) {
+//			logger.InfoContext(ctx, "request rejected", "status", p.Status)
+//			return
+//		}
+//		logger.ErrorContext(ctx, "request failed", "err", err)
+//	})
+//
 // # Route groups
 //
 // [Scope] attaches mappers to the routes of a group only, ahead of the

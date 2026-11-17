@@ -45,7 +45,7 @@
   - RED: `TestHook_StatusOnly` with all nine rows. The status-only rows fail to compile because `ginprblm.ErrStatusOnly` is unexported; confirm that this is the only compile error. Before the export, run the "handler errors" and "no problem written" rows against the current code (temporarily with the internal name in an internal test). That confirms the existing behavior those rows pin, especially `c.String(500, "plain")` with 0 calls. If a row disagrees with the code, stop and report it with the failing output (rule 8). Don't change the row to match.
   - GREEN: run gopls `go_rename_symbol` `errStatusOnly` → `ErrStatusOnly`, and write its godoc (D5).
   - REFACTOR: none expected; /simplify
-- [ ] 3.2 Documentation; verify `go test -run Example ./` passes in `ginprblm`
+- [x] 3.2 Documentation; verify `go test -run Example ./` passes in `ginprblm`
   - In `ginprblm/doc.go` and the doc example, show a hook that tells a status-only abort apart with `errors.Is`, and still treats a 5xx status as a failure.
   - `ginprblm` CHANGELOG entry, Added.
 - [ ] 3.3 Verify slice 3: `GOWORK=off go mod tidy -diff`, `go vet`, `golangci-lint` and both test modes are clean in `ginprblm`, and `go tool cover -func` shows the status-only, recorded-error and no-problem branches of `finish` covered
