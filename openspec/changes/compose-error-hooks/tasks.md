@@ -7,7 +7,7 @@
   - GREEN: a `hooks` field on `Handler`. `AddErrorHook` appends, `isReporting` checks both slots, and `callHook` calls `onError` and then each hook.
   - REFACTOR: the Divergent Change risk in `callHook`. Extract Function `callOne(hook)` for the single call, then /simplify
 - [x] 1.2 Nil hooks and `OnError(nil)` (error-mapping / Scenario: Replaced and added hooks, Examples: misuse); verify `go test -race -run TestHooks_Misuse ./` passes
-  - RED: `TestHooks_Misuse` with the four misuse rows. `AddErrorHook(nil)` panics with a nil call before the fix, or adds a nil entry. Confirm the failure.
+  - Characterization test: `TestHooks_Misuse` with the four misuse rows. They pin the observable calls, not the nil guard: once each hook has its own `recover` (1.3), a nil entry's panic is swallowed, so every row also passes without the guard. The guard itself (a handler with only `AddErrorHook(nil)` builds no reports) is pinned by the white-box RED test in 4.2.
   - GREEN: `AddErrorHook` ignores nil. `OnError` stays unchanged.
   - REFACTOR: none expected; /simplify
 - [x] 1.3 Each hook isolated from a panicking one (error-mapping / Scenario: A panicking hook does not silence the others); verify `go test -race -run TestHooks_Panic ./` passes
@@ -15,10 +15,10 @@
   - GREEN: a `defer recover` per hook call (`callOne`).
   - REFACTOR: check that `safeCall` and `callHook` share no duplicated recovery (Extract Function only if both read better), then /simplify
 - [x] 1.4 Every hook receives notes, and silent requests reach none (error-mapping / Scenario: Every hook receives notes and silent requests reach none); verify `go test -race -run TestHooks_Notes ./` passes
-  - RED: `TestHooks_Notes` with the four rows: the mapper panic, the invalid status, discovery's 404 on `GET /problems/unknown` with a namespace configured, and a nil error. It asserts that A and B both receive each event.
-  - GREEN: none expected if every note goes through `callHook`. If a row fails, route that note site through `callHook`; don't add a second dispatch path.
+  - Characterization test (expected to pass on first run, since every note already goes through `callHook`): `TestHooks_Notes` with the five rows: the mapper panic, the invalid status, discovery's 404 on `GET /problems/unknown` with a namespace configured (with and without a panicking enricher), and a nil error. It asserts that A and B both receive each event. Confirm it is meaningful: temporarily make `callHook` skip the added hooks and see the note rows fail, then restore.
+  - GREEN: none expected. If a row fails, route that note site through `callHook`; don't add a second dispatch path.
   - REFACTOR: /simplify
-- [x] 1.5 The existing hook and faulty-code tests still pass unchanged (error-mapping / Scenario: Hook sees the original error, Scenario: Consumer code panics); verify `go test -race -run 'TestOnError|TestFaulty' ./` passes
+- [x] 1.5 The existing hook and faulty-code tests still pass unchanged (error-mapping / Scenario: Hook sees the original error, Scenario: Consumer code panics); verify `go test -race -run 'TestOnError|TestResolve_FaultyConsumer' ./` passes
 - [x] 1.6 Documentation; verify `go test -run Example ./` passes
   - `AddErrorHook` godoc covers:
     - the order
@@ -30,11 +30,12 @@
   - Update the README hook section.
   - CHANGELOG `[Unreleased]` Added.
 - [x] 1.7 Verify slice 1: `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `AddErrorHook`, `isReporting`, `callHook` and `callOne` fully covered, including the no-hook, nil and panic branches. `go vet`, `golangci-lint` and gopls `go_diagnostics` on the changed files are clean. Run `go_symbol_references` on `onError` before the change, and record every report site it lists.
+  - Note: `onError` is referenced by the field (`handler.go:28`), `isReporting`, `callHook` and `OnError` (`options.go`). The report sites, all through `isReporting`/`callHook`, are `report` (called from `normalize`, `respond`, `encode` and the recovery paths), `noteType`, `NoteShadowedRoute` and `safeCall`.
 
 ## 2. Slice: the same hooks in every adapter
 
 - [x] 2.1 Hooks in net/http, gin and fiber (error-mapping / Scenario: Same hooks in every adapter); verify `go test -race -run TestParity_Hooks ./...` passes in `internal/paritytest` in both CI modes
-  - RED: `TestParity_Hooks`, one row per adapter, through the existing parity harness. Fails to compile before slice 1, and passes after it.
+  - Characterization test: `TestParity_Hooks`, one row per adapter, through the existing parity harness. It fails to compile before slice 1 and is expected to pass on first run after it, because adapters pass options through. Confirm it is meaningful: temporarily drop the options in one adapter's handler construction and see that row fail, then restore.
   - GREEN: no adapter code change expected. If an adapter drops options, fix that adapter.
   - REFACTOR: reuse the harness in `parity_test.go`; /simplify
 - [x] 2.2 Verify slice 2: `internal/paritytest` passes with `-race`, and `go vet` and `golangci-lint` are clean
@@ -49,6 +50,21 @@
   - In `ginprblm/doc.go` and the doc example, show a hook that tells a status-only abort apart with `errors.Is`, and still treats a 5xx status as a failure.
   - `ginprblm` CHANGELOG entry, Added.
 - [x] 3.3 Verify slice 3: `GOWORK=off go mod tidy -diff`, `go vet`, `golangci-lint` and both test modes are clean in `ginprblm`, and `go tool cover -func` shows the status-only, recorded-error and no-problem branches of `finish` covered
+
+## 4. Review fixes
+
+- [ ] 4.1 gin's own unrouted 404 and 405 reach the hooks as `ErrStatusOnly`, and a recorded error after the body still reaches them (gin-adapter / Scenario: Classifying a status-only abort in a hook, Examples: gin's own aborts, and the "error after body" row); verify `go test -race -run TestHook_StatusOnly ./` passes in `ginprblm`
+  - Characterization test (expected to pass on first run; the behavior already exists): add the unrouted `GET` (404) and wrong-method with `HandleMethodNotAllowed` (405) rows as positive assertions, and the "error after body" row. Confirm they are meaningful: flip each row's expectation temporarily and see it fail, then restore.
+  - Docs: the `ErrStatusOnly` godoc (`ginprblm/middleware.go`) and `ginprblm/doc.go` say gin's unrouted 404/405 also match, so a hook shouldn't treat every `ErrStatusOnly` below 500 as an intentional rejection (D5).
+- [ ] 4.2 `AddErrorHook(nil)` leaves a handler not reporting (error-mapping / Examples: misuse, `AddErrorHook(nil)`); verify `go test -race -run TestAddErrorHook_NilIsNotReporting ./` passes
+  - RED: a white-box test through `export_test.go` asserting that `NewHandler(AddErrorHook(nil))` has `isReporting` false. Remove the `if hook != nil` guard temporarily and confirm the test fails, then restore it (GREEN).
+- [ ] 4.3 The discovery-404-with-panicking-enricher row of `TestHooks_Notes` is a spec row (error-mapping / Scenario: Every hook receives notes and silent requests reach none); remove its "Not a spec row" comment
+- [ ] 4.4 Documentation fixes; verify `go test -run Example ./...` passes
+  - The `report` comment (`handler.go`) covers all hooks, not only `OnError`.
+  - README hook section, `ginprblm/middleware.go` and `fiberprblm/handler.go` say "the hooks (`OnError` and `AddErrorHook`)" instead of "the `OnError` hook".
+  - The `AddErrorHook` godoc notes that hooks may run during resolution (type notes) before the response is written, so modifying the problem changes the response.
+  - RELEASING.md step 2: "the module's CHANGELOG.md (root, or `<module>/CHANGELOG.md` when it has one)".
+- [ ] 4.5 Verify the review fixes: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...` and `GOWORK=off go mod tidy -diff` are clean, and `openspec validate compose-error-hooks --strict` passes
 
 ## Workflow follow-up
 

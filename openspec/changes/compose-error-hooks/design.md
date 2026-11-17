@@ -87,11 +87,14 @@ Rename `errStatusOnly` to `ErrStatusOnly` with gopls `go_rename_symbol`, keeping
 - it is wrapped in a status hint, so match it with `errors.Is`
 - the problem status is the recorded one
 - it also covers `c.Status(5xx)` without a body, so a hook that logs status-only aborts as ordinary responses should still treat `p.Status >= 500` as a failure
+- it also covers gin's own answer to an unrouted request: a 404 for a path no route claims, and a 405 for a wrong method when `HandleMethodNotAllowed` is on. No handler ran, so nothing was rejected on purpose; a hook shouldn't treat every `ErrStatusOnly` below 500 as an intentional rejection. This is documented, not changed: gin records these statuses exactly like `c.AbortWithStatus`, and the middleware can't tell them apart without inspecting gin's routing.
 
 Alternatives considered:
 - **The names `ErrAbortedWithStatus` and `ErrNoError`.** `ErrStatusOnly` matches the request, the internal name and the spec wording.
 - **A core sentinel shared by all adapters.** Rejected: only gin turns a bare status into a problem.
 - **Passing a nil error to the hook.** Rejected: hooks rely on a non-nil error, and the nil-error requirement says no hook call for nil.
+
+**Which responses reach the hooks:** a response with no error status and no recorded error never calls them. A recorded error always does, even when the body was already written and no problem can be (the existing "error after body" behavior of `finish`): the hook still hears about the failure.
 
 **Failure mode:** a consumer compares with `==`. The godoc says to use `errors.Is`, because the hook receives the sentinel wrapped in a status hint.
 

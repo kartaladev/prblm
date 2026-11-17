@@ -33,7 +33,7 @@ No breaking change. Both additions are new API (a compatibility commitment), and
 ### Modified Capabilities
 
 - `error-mapping`: the `OnError hook` requirement grows to cover added hooks, their order and their independence from `OnError`. The faulty-consumer-code requirement isolates each hook, so a panicking hook no longer stops the hooks after it.
-- `gin-adapter`: a status-only abort reaches the hooks as an error that matches the exported `ErrStatusOnly`.
+- `gin-adapter`: a status-only abort reaches the hooks as an error that matches the exported `ErrStatusOnly`. gin's own 404 and 405 for an unrouted request are status-only aborts too; this is documented, not changed.
 
 ## Scope by Gall's Law
 

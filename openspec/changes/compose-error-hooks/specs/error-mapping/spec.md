@@ -52,6 +52,7 @@ Consumers SHALL be able to register a hook that is called once per handled error
 | the handler writes `ErrX` after a registered mapper panics | a panic error, then `ErrX` |
 | a mapper returns status 200 for `ErrX` | an error wrapping `ErrInvalidStatus`, then `ErrX` |
 | type discovery answers `GET /problems/unknown` with 404 | (none) |
+| type discovery answers `GET /problems/unknown` with 404 while an enricher panics | (none) |
 | the handler writes a nil error | (none) |
 
 #### Scenario: Same hooks in every adapter
