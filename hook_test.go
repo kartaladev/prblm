@@ -468,3 +468,101 @@ func TestHooks_Panic(t *testing.T) {
 		})
 	}
 }
+
+// error-mapping / Scenario: Every hook receives notes and silent requests
+// reach none.
+func TestHooks_Notes(t *testing.T) {
+	t.Parallel()
+
+	isPanic := func(err error) bool { _, ok := errors.AsType[*prblm.PanicError](err); return ok }
+	isInvalidStatus := func(err error) bool { return errors.Is(err, prblm.ErrInvalidStatus) }
+	//nolint:errorlint // the answered error must be the original value itself.
+	isErrX := func(err error) bool { return err == errVesselNotFound }
+
+	// writeErrX has the handler write ErrX through net/http.
+	writeErrX := func(t *testing.T, h *prblm.Handler) { t.Helper(); write(t, h, errVesselNotFound) }
+
+	tests := []struct {
+		event    func(t *testing.T, h *prblm.Handler)
+		name     string
+		opts     []prblm.Option
+		received []func(error) bool
+	}{
+		{
+			name: "registered mapper panics",
+			opts: []prblm.Option{prblm.WithMappers(
+				prblm.MapperFunc(func(context.Context, error) *prblm.Problem { panic("mapper broke") }),
+				prblm.Status(errVesselNotFound, 409),
+			)},
+			event:    writeErrX,
+			received: []func(error) bool{isPanic, isErrX},
+		},
+		{
+			name:     "mapper returns status 200",
+			opts:     []prblm.Option{prblm.WithMappers(prblm.Status(errVesselNotFound, 200))},
+			event:    writeErrX,
+			received: []func(error) bool{isInvalidStatus, isErrX},
+		},
+		{
+			name: "discovery answers an unknown type with 404",
+			opts: []prblm.Option{prblm.WithNamespace("/problems"), prblm.WithTypes(blacklistedSupplier)},
+			event: func(t *testing.T, h *prblm.Handler) {
+				t.Helper()
+
+				if rec := discover(t, h, http.MethodGet, "/problems/unknown", nil); rec.Code != http.StatusNotFound {
+					t.Errorf("discovery status = %d, want 404", rec.Code)
+				}
+			},
+		},
+		{
+			// Not a spec row: a plain discovery 404 reports nothing at all,
+			// so this row makes the silent request produce a note first.
+			name: "discovery 404 with a panicking enricher",
+			opts: []prblm.Option{
+				prblm.WithNamespace("/problems"),
+				prblm.WithTypes(blacklistedSupplier),
+				prblm.WithEnrichers(func(context.Context, *prblm.Problem) { panic("enricher broke") }),
+			},
+			event: func(t *testing.T, h *prblm.Handler) {
+				t.Helper()
+
+				if rec := discover(t, h, http.MethodGet, "/problems/unknown", nil); rec.Code != http.StatusNotFound {
+					t.Errorf("discovery status = %d, want 404", rec.Code)
+				}
+			},
+		},
+		{
+			name:  "nil error",
+			event: func(t *testing.T, h *prblm.Handler) { t.Helper(); write(t, h, nil) },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var l callLog
+
+			h := prblm.NewHandler(append(tt.opts, prblm.OnError(l.hook("A")), prblm.AddErrorHook(l.hook("B")))...)
+			tt.event(t, h)
+
+			byHook := map[string][]error{}
+			for _, c := range l.recorded() {
+				byHook[c.name] = append(byHook[c.name], c.err)
+			}
+
+			for _, name := range []string{"A", "B"} {
+				got := byHook[name]
+				if len(got) != len(tt.received) {
+					t.Fatalf("hook %s received %v, want %d calls", name, got, len(tt.received))
+				}
+
+				for i, matches := range tt.received {
+					if !matches(got[i]) {
+						t.Errorf("hook %s call %d received %v, which does not match", name, i, got[i])
+					}
+				}
+			}
+		})
+	}
+}

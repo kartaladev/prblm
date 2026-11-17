@@ -14,11 +14,11 @@
   - RED: `TestHooks_Panic` with the four rows: `"boom"`, `nil` (`*runtime.PanicNilError`) and `http.ErrAbortHandler`, with the panicking hook first, in the middle and last. It asserts the 409 response and the order of the recording hooks. The middle and first rows fail with a single shared `recover`.
   - GREEN: a `defer recover` per hook call (`callOne`).
   - REFACTOR: check that `safeCall` and `callHook` share no duplicated recovery (Extract Function only if both read better), then /simplify
-- [ ] 1.4 Every hook receives notes, and silent requests reach none (error-mapping / Scenario: Every hook receives notes and silent requests reach none); verify `go test -race -run TestHooks_Notes ./` passes
+- [x] 1.4 Every hook receives notes, and silent requests reach none (error-mapping / Scenario: Every hook receives notes and silent requests reach none); verify `go test -race -run TestHooks_Notes ./` passes
   - RED: `TestHooks_Notes` with the four rows: the mapper panic, the invalid status, discovery's 404 on `GET /problems/unknown` with a namespace configured, and a nil error. It asserts that A and B both receive each event.
   - GREEN: none expected if every note goes through `callHook`. If a row fails, route that note site through `callHook`; don't add a second dispatch path.
   - REFACTOR: /simplify
-- [ ] 1.5 The existing hook and faulty-code tests still pass unchanged (error-mapping / Scenario: Hook sees the original error, Scenario: Consumer code panics); verify `go test -race -run 'TestOnError|TestFaulty' ./` passes
+- [x] 1.5 The existing hook and faulty-code tests still pass unchanged (error-mapping / Scenario: Hook sees the original error, Scenario: Consumer code panics); verify `go test -race -run 'TestOnError|TestFaulty' ./` passes
 - [ ] 1.6 Documentation; verify `go test -run Example ./` passes
   - `AddErrorHook` godoc covers:
     - the order
