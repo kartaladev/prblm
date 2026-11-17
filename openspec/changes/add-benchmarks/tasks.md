@@ -19,9 +19,9 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
   - RED: write the case table and the pre-loop assertion, then temporarily expect 500 for `mapped-json` and confirm the smoke run fails with the assertion's message
   - GREEN: the `discardWriter` (header map cleared per iteration), requests built before `b.Loop()`, `b.ReportAllocs()`, and the status and byte count written to a package-level sink
   - REFACTOR: look for Duplicated Code between the case setup and the parity test's configuration (Extract Function `benchOptions()`), then /simplify
-- [ ] 1.2 Write BENCHMARKS.md (design D4: machine preparation, run command, raw-file naming, `benchstat` summary) and the README "Performance → net/http" subsection with "results pending"; verify the command in BENCHMARKS.md runs as written
+- [x] 1.2 Write BENCHMARKS.md (design D4: machine preparation, run command, raw-file naming, `benchstat` summary) and the README "Performance → net/http" subsection with "results pending"; verify the command in BENCHMARKS.md runs as written
 - [ ] 1.3 **(idle machine)** Run the D4 protocol for `BenchmarkWrap`, commit `bench/results/core-<date>-<sha>.txt`, and fill the net/http table from `benchstat`; verify the table names the CPU, OS, Go version and SHA, and the variance is at most ±5%
-- [ ] 1.4 Verify slice 1 end to end: suites and lint clean in the core, `GOWORK=off` clean, and the smoke run passes
+- [x] 1.4 Verify slice 1 end to end: suites and lint clean in the core, `GOWORK=off` clean, and the smoke run passes
 
 ## 2. Slice: every net/http case and the core micro-benchmarks
 

@@ -1,0 +1,94 @@
+# Benchmarks
+
+The benchmarks measure what prblm costs on the request path of each adapter, next to a baseline
+handler that answers the same request without prblm. The numbers in the README's "Performance"
+section are produced only by the protocol below, and every one of them can be reproduced from a
+raw result file committed in `bench/results/`.
+
+## The cases
+
+Every adapter module runs the same request-path cases, with the same names, errors, options and
+`Accept` values, so their rows compare by name. Each case runs with one enricher (`trace_id`) and
+an `OnError` hook that does nothing, the shape of a real configuration.
+
+| Case | Request | Expected response |
+|---|---|---|
+| `baseline` | `GET /v1/vessels/7` | 404 with a fixed JSON body, without prblm |
+| `mapped-json` | `GET /v1/vessels/7`, the handler returns a mapped error | 404 `application/problem+json` |
+
+| Module | Benchmark | Source |
+|---|---|---|
+| `github.com/kartaladev/prblm` (net/http) | `BenchmarkWrap` | `bench_test.go` |
+
+Before it is timed, each case serves one request and fails unless the status, `Content-Type` and
+a body marker are what the case expects, so a benchmark never measures a broken path.
+
+## Checking that the benchmarks run
+
+Every benchmark runs once, without timing, in each module:
+
+```sh
+go test -run '^$' -bench . -benchtime 1x ./...
+```
+
+This is the smoke run. It needs no idle machine, and its timings mean nothing.
+
+## Measurement protocol
+
+Numbers are measured only on an idle machine; a loaded machine gives noisy, unrepeatable numbers.
+
+### 1. Prepare the machine
+
+- Close builds, browsers and anything that indexes files (IDEs, search).
+- Run on mains power, and let the machine rest for 2 minutes.
+- Record the environment, which every published table names:
+
+  ```sh
+  go version
+  go env GOOS GOARCH
+  sysctl -n machdep.cpu.brand_string   # macOS
+  lscpu | grep 'Model name'            # Linux
+  git rev-parse --short HEAD
+  ```
+
+### 2. Run and save the raw output
+
+Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions
+in its own `go.mod`. The raw output goes to `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`,
+where `<module>` is `core` for the root module:
+
+```sh
+mkdir -p bench/results
+GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./... \
+  | tee "bench/results/core-$(date +%F)-$(git rev-parse --short HEAD).txt"
+```
+
+Commit the raw file: later comparisons with `benchstat` need it, not only the summary.
+
+### 3. Summarize with benchstat
+
+Install `benchstat` once; it is a developer tool and is not added to any `go.mod`:
+
+```sh
+go install golang.org/x/perf/cmd/benchstat@latest
+```
+
+The README tables are its output for the raw file:
+
+```sh
+benchstat bench/results/core-<yyyy-mm-dd>-<short-sha>.txt
+```
+
+`benchstat` reports the spread of every row (`± n%`). A row above ±5% is measured again. If it
+stays above, the published table marks the variance.
+
+### Comparing two runs
+
+Compare only files from the same machine, old against new:
+
+```sh
+benchstat bench/results/core-<old>.txt bench/results/core-<new>.txt
+```
+
+A change is an improvement only when `benchstat` reports it as significant (p < 0.05); a `~`
+means no measurable difference.

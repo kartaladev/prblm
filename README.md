@@ -758,6 +758,22 @@ h := prblm.NewHandler(prblm.WithMappers(
 | validatormap | message | `failed validation: <tag>` | `validatormap.WithTranslator` |
 | validatormap | location | `field`, never both `field` and `pointer` in one problem | `validatormap.WithJSONNames()`, with `validatormap.JSONName` registered, for `pointer` |
 
+## Performance
+
+What prblm costs on the request path is measured per adapter, next to a `baseline` handler that
+answers the same request without prblm, so the difference between the two rows is prblm's
+overhead. The cases, the commands and the measurement protocol are in
+[BENCHMARKS.md](BENCHMARKS.md), and every table comes from a raw result file committed in
+`bench/results/`. Each table names the machine, OS, Go version and commit it was measured on, so
+compare overhead, not absolute times.
+
+### net/http
+
+`BenchmarkWrap` (`bench_test.go`): a `ServeMux`, a handler returning an error through
+`Handler.Wrap`, and the problem response.
+
+Results pending: they are published after a measurement run on an idle machine.
+
 ## Defaults
 
 | Behavior | Default | Why | Change it with |
