@@ -61,6 +61,12 @@ jobs:
         # speed (BENCHMARKS.md has the measurement protocol).
         if: contains(fromJSON('[".", "ginprblm", "fiberprblm"]'), matrix.module)
         run: go test -run '^$' -bench . -benchtime 1x ./...
+      - name: benchmarks (smoke, once each, module only)
+        # The published adapter numbers are measured with GOWORK=off,
+        # against the released core named in each go.mod, so that
+        # configuration must keep running too.
+        if: contains(fromJSON('["ginprblm", "fiberprblm"]'), matrix.module)
+        run: GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...
 
   lint:
     runs-on: ubuntu-latest

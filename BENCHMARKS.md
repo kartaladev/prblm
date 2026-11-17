@@ -60,6 +60,14 @@ go test -run '^$' -bench . -benchtime 1x ./...
 (cd fiberprblm && go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
+The adapters also run with `GOWORK=off`, against the released core in their `go.mod`, the
+configuration the published numbers are measured in:
+
+```sh
+(cd ginprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
+(cd fiberprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
+```
+
 This is the smoke run. It needs no idle machine, and its timings mean nothing.
 
 ## Measurement protocol
