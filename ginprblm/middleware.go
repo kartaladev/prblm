@@ -30,7 +30,10 @@ import (
 //   - Any other response, including statuses below 400 and every response
 //     with a body, is sent as the handlers wrote it. A recorded error then
 //     only reaches the hooks ([prblm.OnError] and [prblm.AddErrorHook]),
-//     because appending a problem would corrupt the body.
+//     because appending a problem would corrupt the body. The problem they
+//     receive is resolved from the error alone, not from the status the
+//     client got: an error no mapper recognizes gives them a 500 problem,
+//     even after a handler wrote a 200 body.
 //   - When the client went away (the request context is canceled and the
 //     error wraps [context.Canceled]), nothing is written and the error only
 //     reaches the hooks.

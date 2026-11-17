@@ -505,7 +505,6 @@ func TestMiddleware_HostHeaders(t *testing.T) {
 func routeOK(c *gin.Context) { c.Status(http.StatusOK) }
 
 // gin-adapter / Scenario: Classifying a status-only abort in a hook.
-
 func TestHook_StatusOnly(t *testing.T) {
 	t.Parallel()
 
