@@ -80,11 +80,21 @@ Numbers are measured only on an idle machine; a loaded machine gives noisy, unre
   git rev-parse --short HEAD
   ```
 
+- Record the module versions each adapter is measured against, as its own `go.mod` resolves them
+  (step 2 runs with `GOWORK=off`). From the repository root:
+
+  ```sh
+  (cd ginprblm && GOWORK=off go list -m github.com/kartaladev/prblm github.com/gin-gonic/gin)
+  (cd fiberprblm && GOWORK=off go list -m github.com/kartaladev/prblm github.com/gofiber/fiber/v3 github.com/valyala/fasthttp)
+  ```
+
 ### 2. Run and save the raw output
 
 Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions
-in its own `go.mod`. An adapter module is then measured with the core version its `go.mod`
-requires, not the core in the repository. The raw output goes to
+in its own `go.mod`. An adapter module is then measured with the released core its `go.mod`
+requires, not the core in the repository, so the published adapter tables are measured again after
+every core release. To compare a change to the core in the adapters before it is released, run the
+adapters in workspace mode (without `GOWORK=off`), old against new. The raw output goes to
 `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`, where `<module>` is `core` for the root
 module and the directory name for the others. From the repository root:
 

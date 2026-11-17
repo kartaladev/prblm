@@ -764,8 +764,8 @@ What prblm costs on the request path is measured per adapter, next to a `baselin
 answers the same request without prblm, so the difference between the two rows is prblm's
 overhead. The cases, the commands and the measurement protocol are in
 [BENCHMARKS.md](BENCHMARKS.md), and every table comes from a raw result file committed in
-`bench/results/`. Each table names the machine, OS, Go version and commit it was measured on, so
-compare overhead, not absolute times.
+`bench/results/`. Each table names the machine, OS, Go version, module versions and commit it
+was measured on, so compare overhead, not absolute times.
 
 ### net/http
 
