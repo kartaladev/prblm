@@ -774,6 +774,14 @@ compare overhead, not absolute times.
 
 Results pending: they are published after a measurement run on an idle machine.
 
+### gin
+
+`BenchmarkMiddleware` (`ginprblm/bench_test.go`): a `gin.Engine` with `Recovery` and `Middleware`
+installed with `engine.Use`, a route recording an error with `c.Error`, and the problem response.
+The `baseline` row is a route answering with `c.Data`, without prblm.
+
+Results pending: they are published after a measurement run on an idle machine.
+
 ## Defaults
 
 | Behavior | Default | Why | Change it with |

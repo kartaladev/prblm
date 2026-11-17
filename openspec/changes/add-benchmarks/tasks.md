@@ -42,9 +42,9 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
   - RED: each case's pre-loop assertion shown to catch a wrong expectation
   - GREEN: the benchmark, with a gin-local `discardWriter` and the same case names as net/http
   - REFACTOR: Extract Function for the engine setup shared with the parity cases, then /simplify
-- [ ] 3.2 Add the README "Performance → gin" subsection and the gin commands in BENCHMARKS.md; verify the commands run as written
+- [x] 3.2 Add the README "Performance → gin" subsection and the gin commands in BENCHMARKS.md; verify the commands run as written
 - [ ] 3.3 **(idle machine)** Run the D4 protocol for `ginprblm` (`GOWORK=off`), commit the raw file, and fill the gin table; verify the variance is at most ±5%
-- [ ] 3.4 Verify slice 3 end to end: suites, lint, `GOWORK=off` and smoke run clean in `ginprblm`
+- [x] 3.4 Verify slice 3 end to end: suites, lint, `GOWORK=off` and smoke run clean in `ginprblm`
 
 ## 4. Slice: fiber request-path benchmarks
 

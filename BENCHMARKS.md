@@ -24,6 +24,7 @@ an `OnError` hook that does nothing, the shape of a real configuration.
 | Module | Benchmark | Source |
 |---|---|---|
 | `github.com/kartaladev/prblm` (net/http) | `BenchmarkWrap` | `bench_test.go` |
+| `github.com/kartaladev/prblm/ginprblm` | `BenchmarkMiddleware` | `ginprblm/bench_test.go` |
 
 The core also has micro-benchmarks of its hot paths:
 
@@ -44,6 +45,7 @@ Every benchmark runs once, without timing, in each module:
 
 ```sh
 go test -run '^$' -bench . -benchtime 1x ./...
+(cd ginprblm && go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
 This is the smoke run. It needs no idle machine, and its timings mean nothing.
@@ -69,13 +71,22 @@ Numbers are measured only on an idle machine; a loaded machine gives noisy, unre
 ### 2. Run and save the raw output
 
 Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions
-in its own `go.mod`. The raw output goes to `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`,
-where `<module>` is `core` for the root module:
+in its own `go.mod`. An adapter module is then measured with the core version its `go.mod`
+requires, not the core in the repository. The raw output goes to
+`bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`, where `<module>` is `core` for the root
+module and the directory name for the others. From the repository root:
 
 ```sh
 mkdir -p bench/results
 GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./... \
   | tee "bench/results/core-$(date +%F)-$(git rev-parse --short HEAD).txt"
+```
+
+gin:
+
+```sh
+(cd ginprblm && GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./...) \
+  | tee "bench/results/ginprblm-$(date +%F)-$(git rev-parse --short HEAD).txt"
 ```
 
 Commit the raw file: later comparisons with `benchstat` need it, not only the summary.
@@ -92,6 +103,7 @@ The README tables are its output for the raw file:
 
 ```sh
 benchstat bench/results/core-<yyyy-mm-dd>-<short-sha>.txt
+benchstat bench/results/ginprblm-<yyyy-mm-dd>-<short-sha>.txt
 ```
 
 `benchstat` reports the spread of every row (`± n%`). A row above ±5% is measured again. If it
