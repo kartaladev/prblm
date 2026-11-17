@@ -86,7 +86,9 @@ func OnError(hook func(ctx context.Context, err error, p *Problem)) Option {
 // request goroutine.
 //
 // All the hooks of a report share the same problem, so none of them may
-// modify it.
+// modify it. Hooks can run during resolution, before the response is
+// written (a note about a problem type, for example), so a hook that
+// modifies the problem changes the response too.
 func AddErrorHook(hook func(ctx context.Context, err error, p *Problem)) Option {
 	return func(h *Handler) {
 		if hook != nil {

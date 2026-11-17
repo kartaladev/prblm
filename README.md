@@ -506,11 +506,13 @@ engine.GET("/v1/reports", func(c *gin.Context) {
 - `c.AbortWithStatus(401)`, or a status of 400 or above with no body: an `about:blank` problem
   for that status. The hooks receive an error that matches `ginprblm.ErrStatusOnly` with
   `errors.Is`, so they can tell it apart from a handler error. A bare 5xx status is covered too,
-  so a hook should still treat a problem status of 500 or more as a failure. *(Mirrors
-  `ExampleErrStatusOnly`.)*
+  so a hook should still treat a problem status of 500 or more as a failure. gin's own 404 for a
+  path no route claims, and its 405 with `HandleMethodNotAllowed`, match `ErrStatusOnly` as well:
+  no handler ran for those, so not every `ErrStatusOnly` below 500 is a deliberate rejection.
+  *(Mirrors `ExampleErrStatusOnly`.)*
 - Statuses below 400, responses with a body (`c.JSON`, `c.AbortWithStatusJSON`), streams
   (flushed responses, server-sent events) and hijacked connections (websockets) are sent
-  unchanged; a recorded error then only reaches the `OnError` hook.
+  unchanged; a recorded error then only reaches the hooks (`OnError` and `AddErrorHook`).
 
 **Registration order:** register `Middleware` before any middleware that aborts or writes.
 Middleware that runs earlier and sends the header first leaves nothing to replace: the error then

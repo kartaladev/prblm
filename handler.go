@@ -275,9 +275,9 @@ func (h *Handler) noteType(ctx context.Context, sentinel error, typ string, p *P
 	h.callHook(ctx, fmt.Errorf("%w: %q", sentinel, typ), p)
 }
 
-// report calls the OnError hook, if any and unless ctx is silenced. A hook
-// that panics is ignored: there is nowhere left to report it, and the
-// response must still go out.
+// report calls the hooks (the OnError hook, then the added ones), if there
+// are any and unless ctx is silenced. A hook that panics is ignored: there
+// is nowhere left to report it, and the response must still go out.
 func (h *Handler) report(ctx context.Context, err error, p *Problem) {
 	if h.isReporting(ctx) {
 		h.callHook(ctx, err, p)

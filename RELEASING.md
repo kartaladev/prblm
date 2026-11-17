@@ -52,7 +52,8 @@ their own modules in subdirectories, and depend on a released version of the roo
 
    `GOWORK=off` matters: it proves each module builds against what its own `go.mod` requires,
    not against the workspace.
-2. Move the `[Unreleased]` entries in `CHANGELOG.md` under a heading for the new version and date.
+2. Move the `[Unreleased]` entries in the module's `CHANGELOG.md` (the root one, or
+   `<module>/CHANGELOG.md` when the module has one) under a heading for the new version and date.
 3. In a module other than the root, make sure `go.mod` requires released versions and has no
    `replace` directive pointing into the repository. Until the first core release, `ginprblm` and
    `fiberprblm` replace the core with `../`, and the modules in `mappers/` with `../..`: remove

@@ -22,7 +22,7 @@ import (
 // never sent. A buffered body is replaced by the problem, while a body stream
 // is left alone, as is the response to a client that went away (the request
 // context is canceled and the error wraps [context.Canceled]); the error then
-// only reaches the [prblm.OnError] hook.
+// only reaches the hooks ([prblm.OnError] and [prblm.AddErrorHook]).
 //
 // When opts register problem types (see [prblm.WithTypes]), ErrorHandler
 // also serves their documentation, exactly as [prblm.Handler.Discovery]
