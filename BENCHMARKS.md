@@ -25,6 +25,7 @@ an `OnError` hook that does nothing, the shape of a real configuration.
 |---|---|---|
 | `github.com/kartaladev/prblm` (net/http) | `BenchmarkWrap` | `bench_test.go` |
 | `github.com/kartaladev/prblm/ginprblm` | `BenchmarkMiddleware` | `ginprblm/bench_test.go` |
+| `github.com/kartaladev/prblm/fiberprblm` | `BenchmarkErrorHandler` | `fiberprblm/bench_test.go` |
 
 The core also has micro-benchmarks of its hot paths:
 
@@ -39,6 +40,12 @@ The core also has micro-benchmarks of its hot paths:
 Before it is timed, each case serves one request and fails unless the status, `Content-Type` and
 a body marker are what the case expects, so a benchmark never measures a broken path.
 
+The fiber benchmark calls the app's fasthttp handler (`app.Handler()`) directly, not `app.Test`,
+whose in-memory network round trip would be measured too. Like fasthttp's server on a kept-alive
+connection, it reuses one `fasthttp.RequestCtx`: before every request, the response is reset and a
+request built once is copied in. Its check serves each case twice and fails unless both responses
+are the same, so no state leaks from one request into the next.
+
 ## Checking that the benchmarks run
 
 Every benchmark runs once, without timing, in each module:
@@ -46,6 +53,7 @@ Every benchmark runs once, without timing, in each module:
 ```sh
 go test -run '^$' -bench . -benchtime 1x ./...
 (cd ginprblm && go test -run '^$' -bench . -benchtime 1x ./...)
+(cd fiberprblm && go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
 This is the smoke run. It needs no idle machine, and its timings mean nothing.
@@ -89,6 +97,13 @@ gin:
   | tee "bench/results/ginprblm-$(date +%F)-$(git rev-parse --short HEAD).txt"
 ```
 
+fiber:
+
+```sh
+(cd fiberprblm && GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./...) \
+  | tee "bench/results/fiberprblm-$(date +%F)-$(git rev-parse --short HEAD).txt"
+```
+
 Commit the raw file: later comparisons with `benchstat` need it, not only the summary.
 
 ### 3. Summarize with benchstat
@@ -104,6 +119,7 @@ The README tables are its output for the raw file:
 ```sh
 benchstat bench/results/core-<yyyy-mm-dd>-<short-sha>.txt
 benchstat bench/results/ginprblm-<yyyy-mm-dd>-<short-sha>.txt
+benchstat bench/results/fiberprblm-<yyyy-mm-dd>-<short-sha>.txt
 ```
 
 `benchstat` reports the spread of every row (`± n%`). A row above ±5% is measured again. If it

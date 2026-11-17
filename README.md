@@ -782,6 +782,15 @@ The `baseline` row is a route answering with `c.Data`, without prblm.
 
 Results pending: they are published after a measurement run on an idle machine.
 
+### fiber
+
+`BenchmarkErrorHandler` (`fiberprblm/bench_test.go`): a fiber app with `ErrorHandler` and
+`Recovery`, a route returning an error, and the problem response, driven through the app's
+fasthttp handler without a network round trip. The `baseline` row is a route answering with
+`c.Send`, without prblm.
+
+Results pending: they are published after a measurement run on an idle machine.
+
 ## Defaults
 
 | Behavior | Default | Why | Change it with |

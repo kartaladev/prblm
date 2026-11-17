@@ -52,9 +52,9 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
   - RED: each case's pre-loop assertion shown to catch a wrong expectation. Add a smoke check that runs the same case twice and compares the results, proving no state leaks between iterations.
   - GREEN: the benchmark. `github.com/valyala/fasthttp` becomes a direct requirement of `fiberprblm` (already in the graph through fiber); confirm with `go mod tidy` that no new module is added.
   - REFACTOR: Extract Function for the request-context setup, then /simplify
-- [ ] 4.2 Add the README "Performance → fiber" subsection and the fiber commands in BENCHMARKS.md; verify the commands run as written
+- [x] 4.2 Add the README "Performance → fiber" subsection and the fiber commands in BENCHMARKS.md; verify the commands run as written
 - [ ] 4.3 **(idle machine)** Run the D4 protocol for `fiberprblm` (`GOWORK=off`), commit the raw file, and fill the fiber table; verify the variance is at most ±5%
-- [ ] 4.4 Verify slice 4 end to end: suites, lint, `GOWORK=off` and smoke run clean in `fiberprblm`, and `go.mod` gains no new module
+- [x] 4.4 Verify slice 4 end to end: suites, lint, `GOWORK=off` and smoke run clean in `fiberprblm`, and `go.mod` gains no new module
 
 ## 5. Slice: profile-driven optimizations
 
