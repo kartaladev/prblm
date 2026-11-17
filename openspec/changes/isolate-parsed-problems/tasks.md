@@ -64,8 +64,19 @@
   - `errors.As(fmt.Errorf("call: %w", r), &target)` with `target *prblm.Received` succeeds and `target.Problem` holds the upstream fields.
   - `errors.As(..., &p)` with `p *prblm.Problem` does not match (pins the migration note).
   - Characterization tests: show they are meaningful by breaking the behavior temporarily (for example, adding an `As` method or embedding) and recording the failure, then restoring.
+  - Evidence: adding `func (r *Received) Unwrap() error { return &r.Problem }` made `problem_target_does_not_match` fail with `errors.As(*Problem) = true with Not Found: vessel 7 missing in db shard-3, want false`; making `Parse` return `&Received{}` made `received_target_matches` fail with `target.Problem = 0 "" "", want 404 ...` and `Ext("table") = <nil>, false`. Both were restored.
 - [x] 4.3 CHANGELOG `[Unreleased]` migration: client code that does `errors.As(err, &p)` with `p *prblm.Problem` on a `Parse` result no longer matches; use `r *prblm.Received`, then `r.Problem`
 - [x] 4.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
+
+## 5. Review fixes, round 2
+
+- [ ] 5.1 Narrow the 4xx pass-through mapper to an explicit allow-list (design Risks); verify `go test -run ExampleReceived ./` passes
+  - The mapper in `ExampleReceived`, the `Received` godoc in `parse.go` and the README snippet forwards every upstream 4xx. 401, 403, 405, 407 and 429 describe this service's relationship with the upstream and need headers the problem doesn't carry.
+  - Change the condition to `r != nil && (s == 404 || s == 409 || s == 422)` with a one-line comment why. The `r != nil` guard stops a typed-nil `*Received` from panicking in the mapper (reported to the hook).
+  - Keep all three in sync; `// Output:` must still pass.
+- [ ] 5.2 `Received` godoc: warn that relaying `&r.Problem` with a relative upstream `type` resolves it against this service's namespace (`WithNamespace`), which may not document it; resolve it against the upstream URL first if needed
+- [ ] 5.3 Record the test-break evidence for the characterization tests under task 4.2
+- [ ] 5.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
 
 ## Workflow follow-up
 

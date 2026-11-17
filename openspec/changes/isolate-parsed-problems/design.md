@@ -37,7 +37,7 @@ CI runs each module twice: once in workspace mode (`go.work`, local core) and on
    - README sections "Sentinels" and "Parse"
    - the godoc warnings on `Unmarshal*`
    - CHANGELOG
-   - a new `ExampleReceived` that shows the gateway pattern, the explicit relay and a consumer mapper that passes an upstream 4xx status through
+   - a new `ExampleReceived` that shows the gateway pattern, the explicit relay and a consumer mapper that passes an allow-listed upstream 4xx status through
 
 ## Decisions
 
@@ -128,7 +128,7 @@ Rationale: decoding into a `Problem` is constructing one, and the library can't 
 ## Risks / Trade-offs
 
 - [The `Parse` signature break hits every caller] → v0.x, a one-line migration (`r.Problem.X`, or `p := &r.Problem`), and a CHANGELOG entry with a before/after snippet.
-- [A gateway that wants to pass through upstream 4xx statuses gets 502] → Decision: `ExampleReceived` shows it as its third case, next to the safe default and the explicit relay. A consumer mapper `prblm.As(func(r *prblm.Received) *prblm.Problem {...})` passes the upstream 4xx status through with the application's own detail, so nothing from the upstream body leaks. The README snippet that mirrors the example stays in sync.
+- [A gateway that wants to pass through upstream 4xx statuses gets 502] → Decision: `ExampleReceived` shows it as its third case, next to the safe default and the explicit relay. A consumer mapper `prblm.As(func(r *prblm.Received) *prblm.Problem {...})` passes an allow-listed upstream 4xx status (404, 409, 422) through with the application's own detail, so nothing from the upstream body leaks. It is an explicit allow-list, not every 4xx: 401, 403, 405, 407 and 429 describe this service's relationship with the upstream and need headers (`WWW-Authenticate`, `Allow`, `Retry-After`) the problem doesn't carry, so they stay 502. The mapper also guards `r != nil`, since a typed-nil `*Received` would otherwise panic in it and be reported to the hook. The `Received` godoc, `ExampleReceived` and the README snippet stay in sync. The godoc also warns that relaying `&r.Problem` with a relative upstream `type` resolves it against this service's namespace (`WithNamespace`), which may not document it.
 - [Client code that reads a `Parse` result with `errors.As(err, &p)`, `p *prblm.Problem`, stops matching] → it must use `r *prblm.Received` and then `r.Problem`. A test pins both outcomes, and the CHANGELOG migration notes say it.
 - [`errors.Is(err, ErrBadGateway)` becomes true for wrapped received problems] → intended. Documented on `Received` and in the CHANGELOG.
 
