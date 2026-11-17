@@ -41,7 +41,7 @@
 
 ## 3. Slice: `ginprblm.ErrStatusOnly`
 
-- [ ] 3.1 Status-only aborts are identifiable in the hooks (gin-adapter / Scenario: Classifying a status-only abort in a hook); verify `go test -race -run TestHook_StatusOnly ./` passes in `ginprblm`, in both CI modes
+- [x] 3.1 Status-only aborts are identifiable in the hooks (gin-adapter / Scenario: Classifying a status-only abort in a hook); verify `go test -race -run TestHook_StatusOnly ./` passes in `ginprblm`, in both CI modes
   - RED: `TestHook_StatusOnly` with all nine rows. The status-only rows fail to compile because `ginprblm.ErrStatusOnly` is unexported; confirm that this is the only compile error. Before the export, run the "handler errors" and "no problem written" rows against the current code (temporarily with the internal name in an internal test). That confirms the existing behavior those rows pin, especially `c.String(500, "plain")` with 0 calls. If a row disagrees with the code, stop and report it with the failing output (rule 8). Don't change the row to match.
   - GREEN: run gopls `go_rename_symbol` `errStatusOnly` → `ErrStatusOnly`, and write its godoc (D5).
   - REFACTOR: none expected; /simplify

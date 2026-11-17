@@ -128,10 +128,20 @@ func serveDiscovery(h *prblm.Handler, c *gin.Context) bool {
 	return true
 }
 
-// errStatusOnly is the error behind a problem for a status-only abort, such
-// as c.AbortWithStatus(401). No mapper recognizes it, so the status hint
-// makes it an about:blank problem, and the hook sees what happened.
-var errStatusOnly = errors.New("ginprblm: response aborted with an error status and no error")
+// ErrStatusOnly is the error the hooks receive when the middleware answers a
+// status-only abort: a handler set an error status, such as with
+// c.AbortWithStatus(401), and recorded no error with c.Error. No mapper
+// recognizes it, so its status hint makes it an about:blank problem with the
+// recorded status.
+//
+// The hooks receive it wrapped in that status hint, so match it with
+// errors.Is, never with ==. An error a handler recorded never matches it.
+//
+// It also covers c.Status(500) or any other 5xx status set without a body.
+// A hook that logs status-only aborts as ordinary responses (an expected 401
+// or 429) should therefore still treat a problem status of 500 or more as a
+// failure.
+var ErrStatusOnly = errors.New("ginprblm: response aborted with an error status and no error")
 
 // finish decides, once the handlers have returned, what the response
 // becomes. The cases are tried in order.
@@ -150,7 +160,7 @@ func finish(h *prblm.Handler, c *gin.Context, w *deferredWriter) {
 	case last != nil:
 		answer(h, c.Request, w, withHint(last.Err, recorded))
 	case recorded >= http.StatusBadRequest:
-		answer(h, c.Request, w, prblm.WithStatus(errStatusOnly, recorded))
+		answer(h, c.Request, w, prblm.WithStatus(ErrStatusOnly, recorded))
 	default:
 		w.commitNow()
 	}
