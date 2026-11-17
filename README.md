@@ -770,7 +770,8 @@ compare overhead, not absolute times.
 ### net/http
 
 `BenchmarkWrap` (`bench_test.go`): a `ServeMux`, a handler returning an error through
-`Handler.Wrap`, and the problem response.
+`Handler.Wrap`, wrapped in `Handler.Recover` as the gin and fiber benchmarks install their
+`Recovery`, and the problem response. The `baseline` row is a handler answering without prblm.
 
 Results pending: they are published after a measurement run on an idle machine.
 

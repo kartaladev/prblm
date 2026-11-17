@@ -120,10 +120,12 @@ type wrapCase struct {
 }
 
 // newWrapServer returns the server of tc, built once per case, as an
-// application builds it at startup: a ServeMux routing the vessel and
-// contract paths to a handler returning tc.err through Wrap, with the type
-// documentation mounted at the discovery path, as internal/paritytest does.
-// The baseline routes the vessel path to a handler without prblm.
+// application builds it at startup, and as internal/paritytest builds it: a
+// ServeMux routing the vessel and contract paths to a handler returning
+// tc.err through Recover(Wrap(...)), with the type documentation mounted at
+// the discovery path. Like the gin and fiber benchmarks, which install their
+// Recovery, every case then measures recovery and handling. The baseline
+// routes the vessel path to a handler without prblm.
 func newWrapServer(tc wrapCase) http.Handler {
 	mux := http.NewServeMux()
 
@@ -134,7 +136,7 @@ func newWrapServer(tc wrapCase) http.Handler {
 	}
 
 	h := prblm.NewHandler(benchOptions()...)
-	route := h.Wrap(func(http.ResponseWriter, *http.Request) error { return tc.err })
+	route := h.Recover(h.Wrap(func(http.ResponseWriter, *http.Request) error { return tc.err }))
 
 	mux.Handle("GET /v1/vessels/{id}", route)
 	mux.Handle("GET /v1/contracts/{id}", route)
@@ -263,8 +265,8 @@ var wrapCases = []wrapCase{
 }
 
 // BenchmarkWrap measures the net/http request path: routing, the handler,
-// Wrap, resolution, enrichment, encoding and writing the response, and the
-// type documentation served at the discovery path.
+// Recover and Wrap, resolution, enrichment, encoding and writing the
+// response, and the type documentation served at the discovery path.
 func BenchmarkWrap(b *testing.B) {
 	for _, tc := range wrapCases {
 		b.Run(tc.name, func(b *testing.B) {
