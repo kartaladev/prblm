@@ -478,10 +478,10 @@ func (h *Handler) answer(tw *trackingWriter, r *http.Request, err error) {
 // A panic with [http.ErrAbortHandler] itself is passed on unchanged, so
 // net/http aborts the response as designed; it is not reported. When the
 // handler has already started the response, or the panic shows the client
-// connection is broken (EPIPE, ECONNRESET), nothing is written and the hook
-// receives the panic with a nil problem.
+// connection is broken (EPIPE, ECONNRESET), nothing is written and the hooks
+// receive the panic with a nil problem.
 //
-// Enrichers and the hook see the context of the request Recover received,
+// Enrichers and the hooks see the context of the request Recover received,
 // not values that middleware inside it added before the panic: install
 // Recover inside middleware whose context values they need.
 //
@@ -768,7 +768,7 @@ func (h *Handler) RespondDiscovery(ctx context.Context, req DiscoveryRequest) (R
 // and req.Path are read, so an adapter need not read the headers.
 //
 // When discovery would have served a documentation page or the index for
-// req, the hook receives a note wrapping [ErrShadowedDocumentation] that
+// req, the hooks receive a note wrapping [ErrShadowedDocumentation] that
 // names the route and the path, with a nil problem. Each route is noted
 // once, at its first conflicting request, so one conflict cannot flood the
 // log, and at most 256 routes are noted. There is no note when discovery is

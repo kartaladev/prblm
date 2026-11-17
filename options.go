@@ -90,8 +90,10 @@ func OnError(hook func(ctx context.Context, err error, p *Problem)) Option {
 //
 // All the hooks of a report share the same problem, so none of them may
 // modify it. Like the OnError hook, an added hook receives a nil problem
-// with some notes, so it checks p before reading it. Hooks can run during resolution, before the response is
-// written (a note about a problem type, for example), so a hook that
+// with some reports (the panic and shadowed-documentation notes, and a
+// handler panic [Handler.Recover] catches after the response started), so
+// it checks p before reading it. Hooks can run during resolution, before
+// the response is written (a note about a problem type, for example), so a hook that
 // modifies the problem changes the response too.
 func AddErrorHook(hook func(ctx context.Context, err error, p *Problem)) Option {
 	return func(h *Handler) {

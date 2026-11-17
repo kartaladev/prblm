@@ -76,7 +76,7 @@
 // that prefers it, and an index at the namespace path. Framework adapters
 // serve the same responses through [Handler.RespondDiscovery], and report
 // application routes that hide a page through [Handler.NoteShadowedRoute],
-// so the hook receives a note wrapping [ErrShadowedDocumentation].
+// so the hooks receive a note wrapping [ErrShadowedDocumentation].
 //
 // # Safe defaults
 //

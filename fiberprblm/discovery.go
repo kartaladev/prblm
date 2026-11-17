@@ -10,7 +10,7 @@ import (
 
 // Discovery returns fiber middleware, for app.Use, that reports every
 // request an endpoint route answers to [prblm.Handler.NoteShadowedRoute],
-// so the [prblm.OnError] hook learns when a route hides type
+// so the hooks ([prblm.OnError] and [prblm.AddErrorHook]) learn when a route hides type
 // documentation: such a page cannot be reached, because [ErrorHandler]
 // only serves documentation for paths no route claims, and it never sees a
 // request a route answers. The note wraps [prblm.ErrShadowedDocumentation]
@@ -22,7 +22,7 @@ import (
 // reported. The middleware never renders the documentation, so it adds no
 // second copy of the pages [ErrorHandler] serves.
 //
-// Discovery is opt-in, since only the hook learns anything from it. It
+// Discovery is opt-in, since only the hooks learn anything from it. It
 // changes no response and returns the error of the handlers after it
 // unchanged, so serving documentation stays with [ErrorHandler]. A panic
 // below it is left to [Recovery], and that request is not reported; the

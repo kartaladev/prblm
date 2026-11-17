@@ -12,7 +12,7 @@ import (
 // it into an error returned to the application's error handler. Paired with
 // [ErrorHandler], the client gets the core's safe 500 problem: status 500,
 // title "Internal Server Error" and no detail, whatever the panic value,
-// and the [prblm.OnError] hook receives an error that unwraps to a
+// and the hooks ([prblm.OnError] and [prblm.AddErrorHook]) receive an error that unwraps to a
 // [*prblm.PanicError] holding the value and the stack.
 //
 // The returned error's message is the constant "Internal Server Error", so

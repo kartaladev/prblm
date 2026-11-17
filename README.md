@@ -343,7 +343,8 @@ Mappers, enrichers and the hook may panic without breaking the response.
 wraps prblm, and passes its consumer's options on, adds its own hook with `AddErrorHook` instead, so
 the consumer's `OnError` can't replace it. Every report calls the `OnError` hook first, then the added
 hooks in the order added, all with the same arguments and the same problem, which none of them may
-modify. That problem is nil for the panic and shadowed-documentation notes, so a hook checks it.
+modify. That problem is nil for the panic and shadowed-documentation notes, and for a handler panic
+`Recover` catches after the response started, so a hook checks it.
 A hook that panics is ignored, and the hooks after it are still called. *(Mirrors
 `ExampleAddErrorHook`.)*
 
