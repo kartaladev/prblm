@@ -46,9 +46,12 @@
 //
 // A mapper returns nil for an error it does not recognize. Enrichers
 // registered with [WithEnrichers] then complete every problem, and the
-// [OnError] hook receives the original error, which is where to log it.
-// Mappers, describers, enrichers and the hook may panic without breaking the
-// response: the panic is reported to the hook as a [*PanicError].
+// [OnError] hook receives the original error, which is where to log it. A
+// library that wraps prblm adds its own hook with [AddErrorHook], which
+// OnError never replaces. Mappers, describers, enrichers and the hooks may
+// panic without breaking the response: the panic of consumer code is
+// reported to the hooks as a [*PanicError], and a panicking hook does not
+// stop the others.
 //
 // # Problem types
 //

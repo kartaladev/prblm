@@ -339,6 +339,20 @@ or an error wrapping `ErrEncoding` for a problem that could not be encoded. A no
 request that succeeded, with no answered error after it. Tell them apart from the error being answered with `errors.Is` and `errors.As`.
 Mappers, enrichers and the hook may panic without breaking the response.
 
+`OnError` sets the one replaceable hook: a later `OnError` replaces an earlier one. A library that
+wraps prblm, and passes its consumer's options on, adds its own hook with `AddErrorHook` instead, so
+the consumer's `OnError` can't replace it. Every report calls the `OnError` hook first, then the added
+hooks in the order added, all with the same arguments and the same problem, which none of them may
+modify. A hook that panics is ignored, and the hooks after it are still called. *(Mirrors
+`ExampleAddErrorHook`.)*
+
+```go
+// In the library:
+opts = append(opts, prblm.AddErrorHook(func(ctx context.Context, err error, p *prblm.Problem) {
+	accessLog.Record(ctx, p.Status, err)
+}))
+```
+
 ## Panic recovery
 
 Recovery is opt-in, so it never competes with recovery middleware you already have. `Recover`

@@ -444,6 +444,25 @@ func ExampleOnError() {
 	// {"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}
 }
 
+func ExampleAddErrorHook() {
+	// A library adds its own hook, which the application's OnError cannot
+	// replace.
+	library := []prblm.Option{prblm.AddErrorHook(func(_ context.Context, _ error, p *prblm.Problem) {
+		fmt.Printf("library access log: %d\n", p.Status)
+	})}
+
+	application := prblm.OnError(func(_ context.Context, err error, _ *prblm.Problem) {
+		fmt.Printf("application log: %v\n", err)
+	})
+
+	h := prblm.NewHandler(append(library, application)...)
+
+	_, _ = h.Respond(context.Background(), prblm.Request{Path: "/v1/vessels/7"}, errors.New("pq: connection refused"))
+	// Output:
+	// application log: pq: connection refused
+	// library access log: 500
+}
+
 func ExampleWithNamespace() {
 	errBlacklisted := errors.New("supplier is blacklisted")
 	typeOf := func(h *prblm.Handler) string {

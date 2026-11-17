@@ -19,7 +19,7 @@
   - GREEN: none expected if every note goes through `callHook`. If a row fails, route that note site through `callHook`; don't add a second dispatch path.
   - REFACTOR: /simplify
 - [x] 1.5 The existing hook and faulty-code tests still pass unchanged (error-mapping / Scenario: Hook sees the original error, Scenario: Consumer code panics); verify `go test -race -run 'TestOnError|TestFaulty' ./` passes
-- [ ] 1.6 Documentation; verify `go test -run Example ./` passes
+- [x] 1.6 Documentation; verify `go test -run Example ./` passes
   - `AddErrorHook` godoc covers:
     - the order
     - isolation
