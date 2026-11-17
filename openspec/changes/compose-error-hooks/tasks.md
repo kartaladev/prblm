@@ -66,6 +66,17 @@
   - RELEASING.md step 2: "the module's CHANGELOG.md (root, or `<module>/CHANGELOG.md` when it has one)".
 - [x] 4.5 Verify the review fixes: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...` and `GOWORK=off go mod tidy -diff` are clean, and `openspec validate compose-error-hooks --strict` passes
 
+## 5. Review fixes, round 2
+
+- [ ] 5.1 The documented example hook survives a nil problem (D3, nil problem failure mode); verify `go test -race -run 'TestExampleHook_NilProblem|ExampleAddErrorHook' ./` passes
+  - RED: factor the `ExampleAddErrorHook` library hook into a package-level function in `example_test.go` that the example uses, and add `TestExampleHook_NilProblem` (core test package) that registers it with `AddErrorHook` and triggers a panic note (a panicking mapper). It fails because the hook dereferences the nil problem, and the panic note's record is lost.
+  - GREEN: guard `p != nil` in the example hook and in the README `AddErrorHook` snippet. The `OnError` and `AddErrorHook` godocs say that `p` may be nil (panic notes and `ErrShadowedDocumentation`).
+- [ ] 5.2 Docs: the remaining "the OnError hook" wording says "the hooks ([OnError] and [AddErrorHook])" in `handler.go` (`Resolve`, `Respond`, `Recover`, `NoteShadowedRoute`, `Discovery` and the internal comments), `panic.go` (`PanicError`, `safeCall`) and `ginprblm/middleware.go`
+- [ ] 5.3 `ginprblm/CHANGELOG.md` says gin's own unrouted 404/405 also match `ErrStatusOnly`
+- [ ] 5.4 `ginprblm/middleware_test.go`: no blank line between the scenario comment and `TestHook_StatusOnly`
+- [ ] 5.5 ginprblm godoc notes that when a handler writes a body and then records an error, the hooks get a 500 problem, not the status the client received (existing behavior; doc only)
+- [ ] 5.6 Verify round 2: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...` and `GOWORK=off go mod tidy -diff` are clean, and `openspec validate compose-error-hooks --strict` passes
+
 ## Workflow follow-up
 
 - Reply on the srvr request: link this change, and point out the 5xx caveat of `ErrStatusOnly` (D5).

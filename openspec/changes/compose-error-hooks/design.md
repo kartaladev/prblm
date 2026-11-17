@@ -77,6 +77,8 @@ Alternative considered: a clone for each hook. Rejected: it allocates on the err
 
 **Failure mode:** a hook that modifies the problem can affect the hooks after it. That breaks the documented contract, the same as today's single hook modifying the problem before it is written. It's left to documentation.
 
+**Failure mode:** the shared problem may be nil. A panic note (`*PanicError` from consumer code) and the `ErrShadowedDocumentation` note come with a nil problem, so a hook that reads `p.Status` without a check panics; the panic is isolated and swallowed, and that hook loses the record. The `OnError` and `AddErrorHook` godocs say that `p` may be nil, and every documented hook (README, `ExampleAddErrorHook`) checks it.
+
 ### D4. `isReporting` is "any hook"
 
 `isReporting` becomes `(h.onError != nil || len(h.hooks) > 0) && !isSilent(ctx)`. It's computed from fields that never change after construction. Silent requests (discovery's 404 and 405) still reach no hook. This has a row.
