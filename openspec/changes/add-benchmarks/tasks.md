@@ -38,7 +38,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 ## 3. Slice: gin request-path benchmarks
 
-- [ ] 3.1 Add `BenchmarkMiddleware` in `ginprblm` with every case of design D3, on a `gin.Engine` built once, using `engine.Use(ginprblm.Recovery(opts...), ginprblm.Middleware(opts...))`; verify `go test -run '^$' -bench BenchmarkMiddleware -benchtime 1x` passes in `ginprblm`
+- [x] 3.1 Add `BenchmarkMiddleware` in `ginprblm` with every case of design D3, on a `gin.Engine` built once, using `engine.Use(ginprblm.Recovery(opts...), ginprblm.Middleware(opts...))`; verify `go test -run '^$' -bench BenchmarkMiddleware -benchtime 1x` passes in `ginprblm`
   - RED: each case's pre-loop assertion shown to catch a wrong expectation
   - GREEN: the benchmark, with a gin-local `discardWriter` and the same case names as net/http
   - REFACTOR: Extract Function for the engine setup shared with the parity cases, then /simplify
