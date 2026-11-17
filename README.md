@@ -521,7 +521,7 @@ sets a status (`c.Status`): that replaces the 404 gin records for a path no rout
 documentation is then not served.
 
 **Recovery and route groups:** `ginprblm.Recovery(opts...)` turns panics into the safe 500 problem
-and gives the panic value and stack to the `OnError` hook. Use it instead of `gin.Recovery()`,
+and gives the panic value and stack to the hooks (`OnError` and `AddErrorHook`). Use it instead of `gin.Recovery()`,
 before or after `Middleware`, and pass both the same options so they share the hook, enrichers and
 namespace. `ginprblm.Scope(mappers...)` attaches mappers to a route group only
 (mirrored by `ExampleRecovery` and `ExampleScope`):
@@ -579,7 +579,7 @@ message (`Cannot GET /x`, or `fiber.NewError(403, "token abc expired")`) is neve
 
 **Recovery and route groups:** `fiberprblm.Recovery()` turns a panic into an error returned to the
 error handler; pair it with `ErrorHandler` to get the safe 500 problem and the panic value and
-stack in the `OnError` hook. With fiber's default error handler, the client gets a plain-text 500
+stack in the hooks (`OnError` and `AddErrorHook`). With fiber's default error handler, the client gets a plain-text 500
 `Internal Server Error`, and the panic value never leaks either. `fiberprblm.Scope(mappers...)`
 attaches mappers to a route group only (mirrored by `ExampleRecovery` and `ExampleScope`):
 
