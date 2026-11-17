@@ -70,13 +70,14 @@
 
 ## 5. Review fixes, round 2
 
-- [ ] 5.1 Narrow the 4xx pass-through mapper to an explicit allow-list (design Risks); verify `go test -run ExampleReceived ./` passes
+- [x] 5.1 Narrow the 4xx pass-through mapper to an explicit allow-list (design Risks); verify `go test -run ExampleReceived ./` passes
   - The mapper in `ExampleReceived`, the `Received` godoc in `parse.go` and the README snippet forwards every upstream 4xx. 401, 403, 405, 407 and 429 describe this service's relationship with the upstream and need headers the problem doesn't carry.
   - Change the condition to `r != nil && (s == 404 || s == 409 || s == 422)` with a one-line comment why. The `r != nil` guard stops a typed-nil `*Received` from panicking in the mapper (reported to the hook).
   - Keep all three in sync; `// Output:` must still pass.
-- [ ] 5.2 `Received` godoc: warn that relaying `&r.Problem` with a relative upstream `type` resolves it against this service's namespace (`WithNamespace`), which may not document it; resolve it against the upstream URL first if needed
-- [ ] 5.3 Record the test-break evidence for the characterization tests under task 4.2
-- [ ] 5.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
+  - Done as an `if r == nil` guard followed by a `switch` on 404, 409 and 422: in `if s := r.Problem.Status; r != nil && ...` the init statement dereferences `r` before the guard runs. A temporary probe confirmed a typed nil gives 502 without a panic, 401 and 429 give 502, and 409 passes through.
+- [x] 5.2 `Received` godoc: warn that relaying `&r.Problem` with a relative upstream `type` resolves it against this service's namespace (`WithNamespace`), which may not document it; resolve it against the upstream URL first if needed
+- [x] 5.3 Record the test-break evidence for the characterization tests under task 4.2
+- [x] 5.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
 
 ## Workflow follow-up
 
