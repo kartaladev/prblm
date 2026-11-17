@@ -31,13 +31,13 @@ CI runs each module twice: once in workspace mode (`go.work`, local core) and on
      - `error-sentinels`: errors.Is on a received problem
      - `error-mapping`: Problem or describer in the chain, and the "safe by default", "consumer decides" and "explicit relay" rows of Gateway returns a received problem
    - Updates the core's own tests and `ExampleParse`.
+   - Replaces the `sentinels.go` paragraph that documented issue #8 with the new rule, so the godoc matches the behavior at the end of this slice.
    - Hot paths: `selfDescribed` (unchanged code, new no-match case) and `mapSentinel`/`firstSentinel` (a new `Is` implementer).
 3. **Parity in gin and fiber, and docs.** The `error-mapping` scenario Same response in every adapter runs in `internal/paritytest`, which replaces the core with the local one in both CI modes, so it can use `Received` before the adapters require core v0.2.0. This adds no adapter code; it proves that the adapters inherit the fix. Docs:
    - README sections "Sentinels" and "Parse"
    - the godoc warnings on `Unmarshal*`
-   - the `sentinels.go` paragraph that currently documents issue #8
    - CHANGELOG
-   - a new `ExampleReceived` that shows the gateway pattern and the explicit relay
+   - a new `ExampleReceived` that shows the gateway pattern, the explicit relay and a consumer mapper that passes an upstream 4xx status through
 
 ## Decisions
 
@@ -57,7 +57,7 @@ Alternatives considered:
 The name `Received` describes where the problem came from (a response the program received), not a role such as "upstream". Test clients use `Parse` too, and for them "upstream" would be wrong.
 
 **Failure modes:**
-- A future edit adds a `Problem() *Problem` method to `Received`, or embeds the problem. A compile-time test pins this: it asserts that `any(&Received{})` is not a `Describer`, plus a resolution row for it.
+- A future edit adds a `Problem() *Problem` method to `Received`, or embeds the problem. A test pins this: a runtime assertion in `TestReceived_Error` that `any(&Received{})` is not a `Describer`, plus a row in `TestResolve_SelfDescribing`.
 - A nil `*Received` in the chain. `Error` and `Is` never dereference the receiver: `Error` returns `<nil received problem>`, and `Is` reports `ErrBadGateway`. Both have spec rows.
 - A caller relays by mistake with `return &r.Problem`. The godoc of `Received` and of `Parse` name this as relaying and say what leaks. It's the explicit opt-in.
 
@@ -128,7 +128,8 @@ Rationale: decoding into a `Problem` is constructing one, and the library can't 
 ## Risks / Trade-offs
 
 - [The `Parse` signature break hits every caller] → v0.x, a one-line migration (`r.Problem.X`, or `p := &r.Problem`), and a CHANGELOG entry with a before/after snippet.
-- [A gateway that wants to pass through upstream 4xx statuses gets 502] → `ExampleReceived` shows a consumer mapper that does it without leaking the upstream detail.
+- [A gateway that wants to pass through upstream 4xx statuses gets 502] → Decision: `ExampleReceived` shows it as its third case, next to the safe default and the explicit relay. A consumer mapper `prblm.As(func(r *prblm.Received) *prblm.Problem {...})` passes the upstream 4xx status through with the application's own detail, so nothing from the upstream body leaks. The README snippet that mirrors the example stays in sync.
+- [Client code that reads a `Parse` result with `errors.As(err, &p)`, `p *prblm.Problem`, stops matching] → it must use `r *prblm.Received` and then `r.Problem`. A test pins both outcomes, and the CHANGELOG migration notes say it.
 - [`errors.Is(err, ErrBadGateway)` becomes true for wrapped received problems] → intended. Documented on `Received` and in the CHANGELOG.
 
 ## Migration Plan

@@ -29,9 +29,11 @@
 - [x] 2.5 The gateway cases are safe by default and consumer code decides (error-mapping / Scenario: Gateway returns a received problem); verify `go test -run TestResolve_Received ./` passes
   - RED: `TestResolve_Received` through `httptest` and the net/http adapter. It has one case per row of "safe by default", "consumer decides" and "explicit relay", including the panicking and nil-returning `prblm.As` mappers, `WithoutBuiltins`, `WithStatus(R, 503)`, `errors.Join` and the typed nil. It asserts the status, type, detail, that there is no `table` member except in the relay row, and the hook calls. Confirm it reproduces issue #8 (the `ErrBadGateway`-wrapped row was 404 with `table` before 2.1).
   - GREEN: none expected; the rows hold through 2.1–2.3.
+  - Proof for #8: on main, `fmt.Errorf("%w: %w", prblm.ErrBadGateway, parsed)` through net/http gave `404 {"title":"Not Found","status":404,"detail":"vessel 7 missing in db shard-3","instance":"/vessels/7","table":"vessels_shard3"}`. After the fix, `TestResolve_Received/inside_ErrBadGateway` and `TestParity_Received` give 502 without `table`.
   - REFACTOR: Extract Function for the shared received-problem fixture, then /simplify
 - [x] 2.6 Update the existing `sentinels_test.go` row "problem inside an outer sentinel" only if its fixture uses `Parse` (it uses `prblm.New`, so it should stay 422). Add a comment that ties it to issue #8: an application-built problem still describes itself. Verify `go test -run TestSentinels_Override ./` passes
-- [x] 2.7 Verify slice 2: `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `Parse`, `Received.Error`, `Received.Is`, `selfDescribed`, `mapSentinel` and `firstSentinel` covered, with every branch exercised. `go vet`, `golangci-lint` and gopls `go_diagnostics` on the changed files are clean. Both CI test modes stay green in every module.
+- [x] 2.7 Replace the issue #8 paragraph in `sentinels.go` with the new rule (a received problem reports `ErrBadGateway`), so the godoc matches the behavior at the end of this slice (done in commit 70025bd)
+- [x] 2.8 Verify slice 2: `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `Parse`, `Received.Error`, `Received.Is`, `selfDescribed`, `mapSentinel` and `firstSentinel` covered, with every branch exercised. `go vet`, `golangci-lint` and gopls `go_diagnostics` on the changed files are clean. Both CI test modes stay green in every module.
 
 ## 3. Slice: parity in gin and fiber, and documentation
 
@@ -46,11 +48,24 @@
     - the explicit relay
     - a consumer mapper that passes through a 4xx status
   - Add a warning to the `Problem.UnmarshalJSON`/`UnmarshalXML` godoc (D4).
-  - Replace the issue #8 paragraph in `sentinels.go` with the new rule.
+  - The issue #8 paragraph in `sentinels.go` was already replaced in slice 2 (task 2.7).
   - Update the README sections "Sentinels" and "Parse".
   - Add `ExampleReceived` with the gateway pattern, the output 502, and the relay.
   - CHANGELOG `[Unreleased]`: **Changed (BREAKING)** for `Parse` returning `*Received`, with a before/after snippet; **Fixed** for #8 (received problems no longer leak).
 - [x] 3.3 Verify the change end to end: all modules pass in both CI modes, `golangci-lint` is clean, and a scratch module built against the local core reproduces the scenario from the #8 issue comment with a 502 and no `table` member
+
+## 4. Review fixes
+
+- [ ] 4.1 `ExampleReceived` shows a consumer mapper as its third case (design Risks); verify `go test -run ExampleReceived ./` passes
+  - RED: add the case with a `prblm.As(func(r *prblm.Received) *prblm.Problem {...})` mapper that passes an upstream 4xx status through with the application's own detail, and extend `// Output:` with the expected line; run it and confirm the output mismatch is the failure.
+  - GREEN: make the example produce the expected output; update the README snippet that mirrors `ExampleReceived` to match.
+  - REFACTOR: /simplify
+- [ ] 4.2 Characterize `errors.As` on a wrapped received problem; verify `go test -run TestReceived_As ./` passes
+  - `errors.As(fmt.Errorf("call: %w", r), &target)` with `target *prblm.Received` succeeds and `target.Problem` holds the upstream fields.
+  - `errors.As(..., &p)` with `p *prblm.Problem` does not match (pins the migration note).
+  - Characterization tests: show they are meaningful by breaking the behavior temporarily (for example, adding an `As` method or embedding) and recording the failure, then restoring.
+- [ ] 4.3 CHANGELOG `[Unreleased]` migration: client code that does `errors.As(err, &p)` with `p *prblm.Problem` on a `Parse` result no longer matches; use `r *prblm.Received`, then `r.Problem`
+- [ ] 4.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
 
 ## Workflow follow-up
 

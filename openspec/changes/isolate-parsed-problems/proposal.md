@@ -45,7 +45,7 @@ Deliberately left for later:
 
 ## Impact
 
-- Core: `parse.go` (new `Received` type, `Parse` signature) and the godoc of the `Unmarshal*` methods, `sentinels.go` and `handler.go`. Also `ExampleParse`, the README sections "Sentinels" and "Parse", and the CHANGELOG (a **Changed/BREAKING** entry and a Fixed entry for #8).
+- Core: `parse.go` (new `Received` type, `Parse` signature), the godoc of the `Unmarshal*` methods (`problem.go`) and the issue #8 paragraph in `sentinels.go`. `handler.go` doesn't change (see D2). Also `ExampleParse`, a new `ExampleReceived`, the README sections "Sentinels" and "Parse", and the CHANGELOG (a **Changed/BREAKING** entry and a Fixed entry for #8).
 - Tests in every module that read responses with `Parse`: the core (including `mappers/sqlmap`, which is part of the core module), `ginprblm`, `fiberprblm`, `gormmap`, `pgxmap` and `validatormap`. Because of the release order (see the design), the sibling modules' test helpers stop depending on the return type of `Parse` first.
 - Release: core v0.2.0. Sibling modules move their requirement to core v0.2.0 when they next release. Their code doesn't use `Parse`, so they keep working on v0.1.0 until then.
 - No new dependencies.
