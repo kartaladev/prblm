@@ -76,16 +76,16 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 Found by verifying and reviewing the code tasks above. Each strengthened check is first shown to fail on the defect it targets (RED), then restored.
 
-- [ ] 7.1 fiber leak check (design D2): `expectResponse` in `fiberprblm/bench_test.go` compares the response of a freshly initialized `RequestCtx` with the response of the reused context after it served a different request (the 200 that supplies the ETag, or another request); verify the smoke run passes
+- [x] 7.1 fiber leak check (design D2): `expectResponse` in `fiberprblm/bench_test.go` compares the response of a freshly initialized `RequestCtx` with the response of the reused context after it served a different request (the 200 that supplies the ETag, or another request); verify the smoke run passes
   - RED: temporarily delete `s.ctx.Response.Reset()` from `serve` and confirm the new comparison (not only the 304 expectation) fails; restore it
-- [ ] 7.2 net/http parity (design D2): `newWrapServer` in the core's `bench_test.go` builds the route as `h.Recover(h.Wrap(...))`, as `internal/paritytest` does, and its comment says so; verify the smoke run passes
-- [ ] 7.3 Stronger pre-loop assertions (design D2, D3) in all three adapters: `discovery-304` asserts an empty body, and `fallback-500` asserts the body does not contain the error's text (`hunter2`); verify the smoke runs pass
+- [x] 7.2 net/http parity (design D2): `newWrapServer` in the core's `bench_test.go` builds the route as `h.Recover(h.Wrap(...))`, as `internal/paritytest` does, and its comment says so; verify the smoke run passes
+- [x] 7.3 Stronger pre-loop assertions (design D2, D3) in all three adapters: `discovery-304` asserts an empty body, and `fallback-500` asserts the body does not contain the error's text (`hunter2`); verify the smoke runs pass
   - RED: in each adapter, confirm a wrong expectation (a non-empty 304 body expected, the error text expected absent from a body that contains it) fails the smoke run; restore it
-- [ ] 7.4 `BenchmarkNegotiate` gains the `*/*` and `application/json` Accept cases; BENCHMARKS.md lists them; verify the smoke run passes
+- [x] 7.4 `BenchmarkNegotiate` gains the `*/*` and `application/json` Accept cases; BENCHMARKS.md lists them; verify the smoke run passes
   - RED: a wrong expected media type for a new case fails; restore it
-- [ ] 7.5 BENCHMARKS.md step 1 records the module versions (`GOWORK=off go list -m` of `github.com/kartaladev/prblm` and the framework, in each adapter's directory), step 2 says adapter tables measure the released core in their `go.mod` and are re-measured after a core release, and the README "Performance" intro names machine, OS, Go version, module versions and commit (design D4); verify the commands run as written
-- [ ] 7.6 CI (design D7): the benchmark smoke step also runs with `GOWORK=off` for `ginprblm` and `fiberprblm`; verify the same commands pass locally in seconds
-- [ ] 7.7 Verify section 7 end to end: `gofmt -l`, `go vet`, `golangci-lint run`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff` and the smoke runs (workspace and `GOWORK=off` for the adapters) clean in the core, `ginprblm`, `fiberprblm` and `internal/paritytest`; `openspec validate add-benchmarks --strict` passes
+- [x] 7.5 BENCHMARKS.md step 1 records the module versions (`GOWORK=off go list -m` of `github.com/kartaladev/prblm` and the framework, in each adapter's directory), step 2 says adapter tables measure the released core in their `go.mod` and are re-measured after a core release, and the README "Performance" intro names machine, OS, Go version, module versions and commit (design D4); verify the commands run as written
+- [x] 7.6 CI (design D7): the benchmark smoke step also runs with `GOWORK=off` for `ginprblm` and `fiberprblm`; verify the same commands pass locally in seconds
+- [x] 7.7 Verify section 7 end to end: `gofmt -l`, `go vet`, `golangci-lint run`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff` and the smoke runs (workspace and `GOWORK=off` for the adapters) clean in the core, `ginprblm`, `fiberprblm` and `internal/paritytest`; `openspec validate add-benchmarks --strict` passes
 
 ## Workflow follow-up
 
