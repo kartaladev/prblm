@@ -48,7 +48,7 @@
 - [x] 3.2 Documentation; verify `go test -run Example ./` passes in `ginprblm`
   - In `ginprblm/doc.go` and the doc example, show a hook that tells a status-only abort apart with `errors.Is`, and still treats a 5xx status as a failure.
   - `ginprblm` CHANGELOG entry, Added.
-- [ ] 3.3 Verify slice 3: `GOWORK=off go mod tidy -diff`, `go vet`, `golangci-lint` and both test modes are clean in `ginprblm`, and `go tool cover -func` shows the status-only, recorded-error and no-problem branches of `finish` covered
+- [x] 3.3 Verify slice 3: `GOWORK=off go mod tidy -diff`, `go vet`, `golangci-lint` and both test modes are clean in `ginprblm`, and `go tool cover -func` shows the status-only, recorded-error and no-problem branches of `finish` covered
 
 ## Workflow follow-up
 
