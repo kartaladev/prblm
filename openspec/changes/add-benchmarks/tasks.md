@@ -25,11 +25,11 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 
 ## 2. Slice: every net/http case and the core micro-benchmarks
 
-- [ ] 2.1 Add the `fallback-500`, `xml`, `resolved-type`, `discovery-200` and `discovery-304` cases to `BenchmarkWrap` (design D3); verify the smoke run passes
+- [x] 2.1 Add the `fallback-500`, `xml`, `resolved-type`, `discovery-200` and `discovery-304` cases to `BenchmarkWrap` (design D3); verify the smoke run passes
   - RED: the pre-loop assertion of each new case shown to catch a wrong status or Content-Type (for example, expect `application/problem+json` for `xml`)
   - GREEN: the cases. Discovery mounts `Handler.Discovery()` on a `ServeMux` exactly as `internal/paritytest` does. The 304 case reads the `ETag` from one request made before the loop.
   - REFACTOR: Extract Function for the shared request construction, then /simplify
-- [ ] 2.2 Add the core micro-benchmarks `BenchmarkResolve` (mapped, fallback), `BenchmarkRespond` (json, xml), `BenchmarkNegotiate` (empty, browser, xml, malformed Accept) and `BenchmarkResolveType` (resolved, kept, invalid, undocumented), next to `BenchmarkIsSubtype`; verify the smoke run passes
+- [x] 2.2 Add the core micro-benchmarks `BenchmarkResolve` (mapped, fallback), `BenchmarkRespond` (json, xml), `BenchmarkNegotiate` (empty, browser, xml, malformed Accept) and `BenchmarkResolveType` (resolved, kept, invalid, undocumented), next to `BenchmarkIsSubtype`; verify the smoke run passes
   - RED: each sub-benchmark asserts its result once before the loop (resolved status, negotiated media type, resolved type); confirm one wrong expectation fails
   - GREEN: the benchmarks, internal ones in the core's internal test files
   - REFACTOR: name the shared fixtures, then /simplify

@@ -1,6 +1,8 @@
 package prblm
 
 import (
+	"context"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -147,6 +149,49 @@ func FuzzIsSubtype(f *testing.F) {
 func BenchmarkIsSubtype(b *testing.B) {
 	for b.Loop() {
 		isSubtype("contracts/blacklisted-supplier")
+	}
+}
+
+// BenchmarkResolveType measures resolving a problem's type against the
+// namespace, with discovery on and a hook to receive the notes.
+func BenchmarkResolveType(b *testing.B) {
+	h := NewHandler(
+		WithNamespace("/v1/api/probs"),
+		WithTypes(DefineType("contracts/blacklisted-supplier", http.StatusConflict, "Supplier is blacklisted", "")),
+		OnError(func(context.Context, error, *Problem) {}),
+	)
+
+	cases := []struct {
+		name string
+		typ  string
+		want string
+	}{
+		{name: "resolved", typ: "contracts/blacklisted-supplier", want: "/v1/api/probs/contracts/blacklisted-supplier"},
+		{name: "kept", typ: "https://kartala.id/probs/contracts/locked", want: "https://kartala.id/probs/contracts/locked"},
+		// Reported to the hook, and replaced by about:blank.
+		{name: "invalid", typ: "Contracts/Locked", want: ""},
+		// Resolved, and reported to the hook: its type URL leads to a 404.
+		{name: "undocumented", typ: "contracts/unknown", want: "/v1/api/probs/contracts/unknown"},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			ctx := b.Context()
+			p := New(http.StatusConflict)
+
+			// resolveType changes p, so each resolution starts from tc.typ.
+			p.Type, p.Title = tc.typ, "Locked"
+			if h.resolveType(ctx, p); p.Type != tc.want {
+				b.Fatalf("resolveType(%q) type = %q, want %q", tc.typ, p.Type, tc.want)
+			}
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				p.Type, p.Title = tc.typ, "Locked"
+				h.resolveType(ctx, p)
+			}
+		})
 	}
 }
 

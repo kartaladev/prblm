@@ -478,37 +478,6 @@ func TestRespond_Canceled(t *testing.T) {
 	}
 }
 
-// benchmarkRespond measures Respond for a mapped error with the given Accept.
-func benchmarkRespond(b *testing.B, accept string) {
-	b.Helper()
-
-	h := prblm.NewHandler(prblm.WithMappers(prblm.Status(errVesselNotFound, http.StatusNotFound)))
-	req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7", Accept: accept}
-	ctx := context.Background()
-
-	b.ReportAllocs()
-
-	for b.Loop() {
-		if _, ok := h.Respond(ctx, req, errVesselNotFound); !ok {
-			b.Fatal("nothing to write")
-		}
-	}
-}
-
-func BenchmarkRespond_JSON(b *testing.B) {
-	for _, accept := range []string{"", "*/*", "application/json"} {
-		b.Run("accept="+accept, func(b *testing.B) { benchmarkRespond(b, accept) })
-	}
-}
-
-func BenchmarkRespond_XML(b *testing.B) {
-	// A browser's default Accept prefers application/xml (q=0.9) over */*
-	// (q=0.8), so it gets XML.
-	for _, accept := range []string{"application/xml", "application/problem+xml", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"} {
-		b.Run("accept="+accept, func(b *testing.B) { benchmarkRespond(b, accept) })
-	}
-}
-
 // problem-response / Scenario: Headers on the response, as adapters merge
 // them into a framework's header (design D2 of add-framework-adapters).
 func TestResponse_MergeInto(t *testing.T) {
