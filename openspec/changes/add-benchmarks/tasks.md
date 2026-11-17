@@ -69,7 +69,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 ## 6. Slice: final results published and smoke-tested in CI
 
 - [ ] 6.1 **(idle machine)** Run the D4 protocol once more for all three modules on the final code, commit the raw files, and replace the README tables with the final `benchstat` output (baseline next to prblm per adapter); verify every table names machine, OS, Go version and SHA
-- [ ] 6.2 Add the benchmark smoke step to `.github/workflows/ci.yml` for the core, `ginprblm` and `fiberprblm` (`go test -run '^$' -bench . -benchtime 1x ./...`, design D7); verify it passes locally with the same command, and that CI time grows by seconds, not minutes
+- [x] 6.2 Add the benchmark smoke step to `.github/workflows/ci.yml` for the core, `ginprblm` and `fiberprblm` (`go test -run '^$' -bench . -benchtime 1x ./...`, design D7); verify it passes locally with the same command, and that CI time grows by seconds, not minutes
 - [ ] 6.3 Verify the change end to end: every module's suites with `-race`, `GOWORK=off` for the published modules, lint clean, `go_vulncheck` shows no new findings, and no `go.mod` gains a new module
 
 ## Workflow follow-up
