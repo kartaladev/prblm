@@ -60,6 +60,9 @@ func WithEnrichers(enrichers ...func(ctx context.Context, p *Problem)) Option {
 // it comes from succeeded, so no call follows it. A hook that panics is
 // ignored.
 //
+// The problem p is therefore nil for some calls (the panic and the shadowed
+// documentation notes), so a hook checks it before reading it.
+//
 // OnError sets the one replaceable hook: a later OnError replaces an earlier
 // one, and OnError(nil) removes it. It is meant for the application. A
 // library that wraps prblm and builds a handler from its consumer's options
@@ -86,7 +89,8 @@ func OnError(hook func(ctx context.Context, err error, p *Problem)) Option {
 // request goroutine.
 //
 // All the hooks of a report share the same problem, so none of them may
-// modify it. Hooks can run during resolution, before the response is
+// modify it. Like the OnError hook, an added hook receives a nil problem
+// with some notes, so it checks p before reading it. Hooks can run during resolution, before the response is
 // written (a note about a problem type, for example), so a hook that
 // modifies the problem changes the response too.
 func AddErrorHook(hook func(ctx context.Context, err error, p *Problem)) Option {

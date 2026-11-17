@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -531,5 +532,37 @@ func TestHooks_Notes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The documented library hook of ExampleAddErrorHook must survive the nil
+// problem of a panic note, or a consumer who copies it loses that record.
+func TestExampleHook_NilProblem(t *testing.T) {
+	t.Parallel()
+
+	var log strings.Builder
+	h := prblm.NewHandler(
+		prblm.AddErrorHook(libraryAccessLog(&log)),
+		prblm.WithMappers(
+			prblm.MapperFunc(func(context.Context, error) *prblm.Problem { panic("mapper broke") }),
+			prblm.Status(errVesselNotFound, 409),
+		),
+	)
+
+	if rec := write(t, h, errVesselNotFound); rec.Code != 409 {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+
+	lines := strings.Split(strings.TrimSuffix(log.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("access log = %q, want a line for the panic note and one for the 409", lines)
+	}
+
+	if !strings.HasPrefix(lines[0], "library note: ") {
+		t.Errorf("first line = %q, want the panic note", lines[0])
+	}
+
+	if want := "library access log: 409"; lines[1] != want {
+		t.Errorf("last line = %q, want %q", lines[1], want)
 	}
 }

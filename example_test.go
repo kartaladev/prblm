@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -444,12 +445,26 @@ func ExampleOnError() {
 	// {"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}
 }
 
+// libraryAccessLog returns the library hook of [ExampleAddErrorHook], which
+// writes one access-log line to w for every report. The problem is nil for
+// some notes (a panic in consumer code, a shadowed documentation route), so
+// the hook checks it.
+func libraryAccessLog(w io.Writer) func(context.Context, error, *prblm.Problem) {
+	return func(_ context.Context, err error, p *prblm.Problem) {
+		if p == nil {
+			_, _ = fmt.Fprintf(w, "library note: %v\n", err)
+
+			return
+		}
+
+		_, _ = fmt.Fprintf(w, "library access log: %d\n", p.Status)
+	}
+}
+
 func ExampleAddErrorHook() {
 	// A library adds its own hook, which the application's OnError cannot
 	// replace.
-	library := []prblm.Option{prblm.AddErrorHook(func(_ context.Context, _ error, p *prblm.Problem) {
-		fmt.Printf("library access log: %d\n", p.Status)
-	})}
+	library := []prblm.Option{prblm.AddErrorHook(libraryAccessLog(os.Stdout))}
 
 	application := prblm.OnError(func(_ context.Context, err error, _ *prblm.Problem) {
 		fmt.Printf("application log: %v\n", err)

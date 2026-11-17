@@ -343,12 +343,19 @@ Mappers, enrichers and the hook may panic without breaking the response.
 wraps prblm, and passes its consumer's options on, adds its own hook with `AddErrorHook` instead, so
 the consumer's `OnError` can't replace it. Every report calls the `OnError` hook first, then the added
 hooks in the order added, all with the same arguments and the same problem, which none of them may
-modify. A hook that panics is ignored, and the hooks after it are still called. *(Mirrors
+modify. That problem is nil for the panic and shadowed-documentation notes, so a hook checks it.
+A hook that panics is ignored, and the hooks after it are still called. *(Mirrors
 `ExampleAddErrorHook`.)*
 
 ```go
 // In the library:
 opts = append(opts, prblm.AddErrorHook(func(ctx context.Context, err error, p *prblm.Problem) {
+	if p == nil { // a note with no problem: a panic in consumer code, a shadowed route
+		accessLog.Note(ctx, err)
+
+		return
+	}
+
 	accessLog.Record(ctx, p.Status, err)
 }))
 ```
