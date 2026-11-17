@@ -53,18 +53,18 @@
 
 ## 4. Review fixes
 
-- [ ] 4.1 gin's own unrouted 404 and 405 reach the hooks as `ErrStatusOnly`, and a recorded error after the body still reaches them (gin-adapter / Scenario: Classifying a status-only abort in a hook, Examples: gin's own aborts, and the "error after body" row); verify `go test -race -run TestHook_StatusOnly ./` passes in `ginprblm`
+- [x] 4.1 gin's own unrouted 404 and 405 reach the hooks as `ErrStatusOnly`, and a recorded error after the body still reaches them (gin-adapter / Scenario: Classifying a status-only abort in a hook, Examples: gin's own aborts, and the "error after body" row); verify `go test -race -run TestHook_StatusOnly ./` passes in `ginprblm`
   - Characterization test (expected to pass on first run; the behavior already exists): add the unrouted `GET` (404) and wrong-method with `HandleMethodNotAllowed` (405) rows as positive assertions, and the "error after body" row. Confirm they are meaningful: flip each row's expectation temporarily and see it fail, then restore.
   - Docs: the `ErrStatusOnly` godoc (`ginprblm/middleware.go`) and `ginprblm/doc.go` say gin's unrouted 404/405 also match, so a hook shouldn't treat every `ErrStatusOnly` below 500 as an intentional rejection (D5).
-- [ ] 4.2 `AddErrorHook(nil)` leaves a handler not reporting (error-mapping / Examples: misuse, `AddErrorHook(nil)`); verify `go test -race -run TestAddErrorHook_NilIsNotReporting ./` passes
+- [x] 4.2 `AddErrorHook(nil)` leaves a handler not reporting (error-mapping / Examples: misuse, `AddErrorHook(nil)`); verify `go test -race -run TestAddErrorHook_NilIsNotReporting ./` passes
   - RED: a white-box test through `export_test.go` asserting that `NewHandler(AddErrorHook(nil))` has `isReporting` false. Remove the `if hook != nil` guard temporarily and confirm the test fails, then restore it (GREEN).
-- [ ] 4.3 The discovery-404-with-panicking-enricher row of `TestHooks_Notes` is a spec row (error-mapping / Scenario: Every hook receives notes and silent requests reach none); remove its "Not a spec row" comment
-- [ ] 4.4 Documentation fixes; verify `go test -run Example ./...` passes
+- [x] 4.3 The discovery-404-with-panicking-enricher row of `TestHooks_Notes` is a spec row (error-mapping / Scenario: Every hook receives notes and silent requests reach none); remove its "Not a spec row" comment
+- [x] 4.4 Documentation fixes; verify `go test -run Example ./...` passes
   - The `report` comment (`handler.go`) covers all hooks, not only `OnError`.
   - README hook section, `ginprblm/middleware.go` and `fiberprblm/handler.go` say "the hooks (`OnError` and `AddErrorHook`)" instead of "the `OnError` hook".
   - The `AddErrorHook` godoc notes that hooks may run during resolution (type notes) before the response is written, so modifying the problem changes the response.
   - RELEASING.md step 2: "the module's CHANGELOG.md (root, or `<module>/CHANGELOG.md` when it has one)".
-- [ ] 4.5 Verify the review fixes: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...` and `GOWORK=off go mod tidy -diff` are clean, and `openspec validate compose-error-hooks --strict` passes
+- [x] 4.5 Verify the review fixes: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...` and `GOWORK=off go mod tidy -diff` are clean, and `openspec validate compose-error-hooks --strict` passes
 
 ## Workflow follow-up
 
