@@ -12,8 +12,8 @@ import "errors"
 //
 // The problem is about:blank with the error's status, the status phrase as
 // title and a fixed detail. The wrap text ("vessel 7"), the error string and
-// any wrapped cause never reach the client; the [OnError] hook receives the
-// error as returned, so log it there.
+// any wrapped cause never reach the client; the hooks ([OnError] and
+// [AddErrorHook]) receive the error as returned, so log it there.
 //
 // A sentinel is found anywhere in the chain, as [errors.Is] reports it:
 // wrapped with %w, joined with [errors.Join], or reported by the Is method of

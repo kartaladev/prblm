@@ -21,10 +21,10 @@ const (
 	fallbackBody = `{"title":"Internal Server Error","status":500}`
 )
 
-// ErrEncoding is wrapped by the note the [OnError] hook receives when a
-// resolved problem could not be encoded (for example an extension holding a
-// channel) and the minimal 500 problem was sent instead. The note also wraps
-// the encoder's own error.
+// ErrEncoding is wrapped by the note the hooks ([OnError] and [AddErrorHook])
+// receive when a resolved problem could not be encoded (for example an
+// extension holding a channel) and the minimal 500 problem was sent instead.
+// The note also wraps the encoder's own error.
 var ErrEncoding = errors.New("prblm: problem could not be encoded")
 
 // Request describes the HTTP request an error occurred in, independently of

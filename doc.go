@@ -44,14 +44,13 @@
 //
 //	return fmt.Errorf("vessel %d: %w", id, prblm.ErrNotFound) // a 404 problem
 //
-// A mapper returns nil for an error it does not recognize. Enrichers
-// registered with [WithEnrichers] then complete every problem, and the
-// [OnError] hook receives the original error, which is where to log it. A
-// library that wraps prblm adds its own hook with [AddErrorHook], which
-// OnError never replaces. Mappers, describers, enrichers and the hooks may
-// panic without breaking the response: the panic of consumer code is
-// reported to the hooks as a [*PanicError], and a panicking hook does not
-// stop the others.
+// A mapper returns nil for an error it does not recognize. Enrichers registered
+// with [WithEnrichers] then complete every problem, and the hooks ([OnError]
+// and [AddErrorHook]) receive the original error, which is where to log it. A
+// library that wraps prblm adds its own hook with [AddErrorHook], which OnError
+// never replaces. Mappers, describers, enrichers and the hooks may panic
+// without breaking the response: the panic of consumer code is reported to the
+// hooks as a [*PanicError], and a panicking hook does not stop the others.
 //
 // # Problem types
 //
@@ -134,10 +133,10 @@
 //
 // Wrap hands the function a writer that records whether the response has
 // started. When the function returns an error after writing a status, body,
-// flush or hijack, the error goes to the [OnError] hook and nothing more is
-// written, because appending a problem would corrupt the response. Write
-// cannot know what was written before it was called and assumes nothing was,
-// unless it receives the writer from Wrap.
+// flush or hijack, the error goes to the hooks ([OnError] and [AddErrorHook])
+// and nothing more is written, because appending a problem would corrupt the
+// response. Write cannot know what was written before it was called and assumes
+// nothing was, unless it receives the writer from Wrap.
 //
 // The writer from Wrap keeps the capabilities of the server's writer
 // reachable through [http.ResponseController]: flushing, hijacking,
@@ -148,10 +147,11 @@
 //
 // # Panic recovery
 //
-// Recovery is opt-in, so it never competes with recovery middleware already
-// in place. [Handler.Recover] turns a panic into the safe 500 problem,
-// rendered like any other (enrichers, format, headers), and hands the panic
-// value and stack to the [OnError] hook as a [*PanicError]: log them there.
+// Recovery is opt-in, so it never competes with recovery middleware already in
+// place. [Handler.Recover] turns a panic into the safe 500 problem, rendered
+// like any other (enrichers, format, headers), and hands the panic value and
+// stack to the hooks ([OnError] and [AddErrorHook]) as a [*PanicError]: log
+// them there.
 //
 //	mux.Handle("GET /v1/vessels/{id}", h.Recover(h.Wrap(getVessel)))
 //

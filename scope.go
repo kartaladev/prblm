@@ -36,7 +36,7 @@ func withRequest(ctx context.Context, req Request) context.Context {
 }
 
 // silentRequest returns a copy of ctx carrying req, answered without
-// calling the OnError hook: discovery answers its 404 and 405 with
+// calling any hook: discovery answers its 404 and 405 with
 // problems, but no application error occurred, so a note about them would
 // mislead. The mark lives with the request, so a request answered inside
 // it, with its own withRequest, is reported as usual.

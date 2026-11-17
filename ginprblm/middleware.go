@@ -33,10 +33,10 @@ import (
 //     because appending a problem would corrupt the body.
 //   - When the client went away (the request context is canceled and the
 //     error wraps [context.Canceled]), nothing is written and the error only
-//     reaches the hook.
+//     reaches the hooks.
 //
 // Register Middleware before middleware that aborts or writes: a header sent
-// before it runs cannot be replaced, so the error then only reaches the hook.
+// before it runs cannot be replaced, so the error then only reaches the hooks.
 // With problem types registered, also register it before middleware that
 // sets a status (c.Status): that replaces the 404 gin records for a path no
 // route claims, and discovery is then not served.

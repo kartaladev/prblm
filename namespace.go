@@ -32,9 +32,9 @@ func WithNamespace(ns string) Option {
 	}
 }
 
-// ErrInvalidType is wrapped by the note the [OnError] hook receives for a
-// relative type that a client would resolve against the request URL, which
-// leads nowhere:
+// ErrInvalidType is wrapped by the note the hooks ([OnError] and
+// [AddErrorHook]) receive for a relative type that a client would resolve
+// against the request URL, which leads nowhere:
 //
 //   - A handler with a namespace (see [WithNamespace]) met a relative type
 //     that is not a valid sub-type. It sent about:blank instead, with the
@@ -49,10 +49,11 @@ func WithNamespace(ns string) Option {
 // errors.Is.
 var ErrInvalidType = errors.New("prblm: problem type is not a valid sub-type")
 
-// ErrUndocumentedType is wrapped by the note the [OnError] hook receives when
-// discovery is on (see [WithTypes]) and a problem's sub-type has no
-// registered definition. The problem is sent unchanged, but its type URL
-// leads to a 404, so the note makes the broken documentation link visible.
+// ErrUndocumentedType is wrapped by the note the hooks ([OnError] and
+// [AddErrorHook]) receive when discovery is on (see [WithTypes]) and a
+// problem's sub-type has no registered definition. The problem is sent
+// unchanged, but its type URL leads to a 404, so the note makes the broken
+// documentation link visible.
 var ErrUndocumentedType = errors.New("prblm: problem type has no registered definition")
 
 // isKeptType reports whether typ is never resolved against a namespace:
