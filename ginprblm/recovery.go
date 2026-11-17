@@ -12,9 +12,9 @@ import (
 // it into the core's safe 500 problem: status 500, title "Internal Server
 // Error" and no detail, whatever the panic value, rendered by the problem
 // handler like any other problem (enrichers, negotiated format, headers).
-// The value never reaches the client; the [prblm.OnError] hook receives an
-// error that unwraps to a [*prblm.PanicError] holding the value and the
-// stack.
+// The value never reaches the client; the hooks ([prblm.OnError] and
+// [prblm.AddErrorHook]) receive an error that unwraps to a
+// [*prblm.PanicError] holding the value and the stack.
 //
 // It is opt-in, and it works whether it is registered before or after
 // [Middleware], or without it. It replaces gin.Recovery(); when both are

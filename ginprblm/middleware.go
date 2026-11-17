@@ -29,8 +29,8 @@ import (
 //     and no recorded error, becomes an about:blank problem for that status.
 //   - Any other response, including statuses below 400 and every response
 //     with a body, is sent as the handlers wrote it. A recorded error then
-//     only reaches the [prblm.OnError] hook, because appending a problem
-//     would corrupt the body.
+//     only reaches the hooks ([prblm.OnError] and [prblm.AddErrorHook]),
+//     because appending a problem would corrupt the body.
 //   - When the client went away (the request context is canceled and the
 //     error wraps [context.Canceled]), nothing is written and the error only
 //     reaches the hook.
@@ -54,7 +54,7 @@ import (
 //
 // With discovery on, Middleware also reports every request a route answers
 // to [prblm.Handler.NoteShadowedRoute], with the route's pattern
-// (c.FullPath()), so the [prblm.OnError] hook receives a note wrapping
+// (c.FullPath()), so the hooks receive a note wrapping
 // [prblm.ErrShadowedDocumentation], once per route, when a route hides
 // documentation. The response is unchanged.
 func Middleware(opts ...prblm.Option) gin.HandlerFunc {
@@ -141,6 +141,12 @@ func serveDiscovery(h *prblm.Handler, c *gin.Context) bool {
 // A hook that logs status-only aborts as ordinary responses (an expected 401
 // or 429) should therefore still treat a problem status of 500 or more as a
 // failure.
+//
+// gin's own answer to an unrouted request matches it too: the 404 for a
+// path no route claims, and the 405 for a wrong method when
+// engine.HandleMethodNotAllowed is on. No handler ran for those, so a hook
+// should not treat every ErrStatusOnly below 500 as a rejection a handler
+// made on purpose.
 var ErrStatusOnly = errors.New("ginprblm: response aborted with an error status and no error")
 
 // finish decides, once the handlers have returned, what the response
