@@ -157,6 +157,51 @@ func ExampleParse() {
 	// 404 Not Found /v1/vessels/7
 }
 
+func ExampleReceived() {
+	// An upstream service answers with a problem that names its internals.
+	upstream := func() *http.Response {
+		rec := httptest.NewRecorder()
+		rec.Header().Set("Content-Type", "application/problem+json")
+		rec.WriteHeader(http.StatusNotFound)
+		_, _ = rec.WriteString(`{"status":404,"title":"Not Found","detail":"vessel 7 missing in db shard-3","table":"vessels_shard3"}`)
+
+		return rec.Result()
+	}
+
+	h := prblm.NewHandler()
+
+	// A gateway returns what it received: the client gets a safe 502, and
+	// the OnError hook gets the error, upstream problem included, to log.
+	gateway := h.Wrap(func(http.ResponseWriter, *http.Request) error {
+		r, err := prblm.Parse(upstream()) //nolint:bodyclose // Parse closes the body.
+		if err != nil {
+			return fmt.Errorf("%w: %w", prblm.ErrBadGateway, err)
+		}
+
+		return fmt.Errorf("load vessel 7: %w", r)
+	})
+
+	// Relaying the upstream problem as it is takes a deliberate &r.Problem.
+	relay := h.Wrap(func(http.ResponseWriter, *http.Request) error {
+		r, err := prblm.Parse(upstream()) //nolint:bodyclose // Parse closes the body.
+		if err != nil {
+			return fmt.Errorf("%w: %w", prblm.ErrBadGateway, err)
+		}
+
+		return &r.Problem
+	})
+
+	for _, handler := range []http.Handler{gateway, relay} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/vessels/7", http.NoBody))
+
+		fmt.Println(rec.Code, rec.Body.String())
+	}
+	// Output:
+	// 502 {"title":"Bad Gateway","status":502,"detail":"An upstream service returned an invalid response.","instance":"/vessels/7"}
+	// 404 {"title":"Not Found","status":404,"detail":"vessel 7 missing in db shard-3","instance":"/vessels/7","table":"vessels_shard3"}
+}
+
 func ExampleNew() {
 	p := prblm.New(http.StatusForbidden,
 		prblm.WithType("https://example.com/probs/out-of-credit"),

@@ -39,7 +39,7 @@
   - RED: `TestParity_Received` in `internal/paritytest`, with one row per adapter (net/http, gin, fiber) asserting the exact body from the Examples table. That module replaces the core with the local one in both modes, so it can use `prblm.Received` before the adapters require v0.2.0. Before 2.1 lands, the same case written with v0.1.0's `*Problem` shows the 404 with `table` in each adapter. Record that output as the proof for #8.
   - GREEN: no adapter code change expected.
   - REFACTOR: reuse the existing parity helpers in `parity_test.go`; /simplify
-- [ ] 3.2 Documentation; verify `go test -run Example ./` passes and `go doc prblm.Received` reads correctly
+- [x] 3.2 Documentation; verify `go test -run Example ./` passes and `go doc prblm.Received` reads correctly
   - The `Received` godoc covers four things:
     - why it isn't a `Describer`
     - the `ErrBadGateway` classification
@@ -50,7 +50,7 @@
   - Update the README sections "Sentinels" and "Parse".
   - Add `ExampleReceived` with the gateway pattern, the output 502, and the relay.
   - CHANGELOG `[Unreleased]`: **Changed (BREAKING)** for `Parse` returning `*Received`, with a before/after snippet; **Fixed** for #8 (received problems no longer leak).
-- [ ] 3.3 Verify the change end to end: all modules pass in both CI modes, `golangci-lint` is clean, and a scratch module built against the local core reproduces the scenario from the #8 issue comment with a 502 and no `table` member
+- [x] 3.3 Verify the change end to end: all modules pass in both CI modes, `golangci-lint` is clean, and a scratch module built against the local core reproduces the scenario from the #8 issue comment with a 502 and no `table` member
 
 ## Workflow follow-up
 

@@ -25,6 +25,38 @@ var ErrNotProblem = errors.New("prblm: response is not a problem")
 
 // Received is a problem that the program received from another service, as
 // [Parse] returns it. Problem holds the decoded document.
+//
+// A Received is an error, but not a [Describer], and it doesn't unwrap to
+// its problem: a problem that another service sent describes that service's
+// failure, often with its internals in the detail and extension members, and
+// relaying it would tell this service's client that its own request was
+// wrong. So a gateway can return the received problem, or wrap it, and the
+// handler never answers with it.
+//
+// A Received reports [ErrBadGateway] through [errors.Is]: another service
+// answered with an error of its own, which this service could not use. With
+// no configuration, an error chain that holds one resolves like that
+// sentinel, to a 502 about:blank problem with the sentinel's fixed detail,
+// and the sentinel rules apply at its position in the chain: an outer
+// sentinel or status hint decides, consumer and scoped mappers come first,
+// and [WithoutBuiltins] leaves the safe 500. The [OnError] hook receives the
+// error as returned; take the upstream problem out with [errors.As] to log
+// it.
+//
+// To relay the upstream problem as it is, detail and extension members
+// included, return &r.Problem: it is a deliberate choice, made at the call
+// site, to pass on what the other service wrote.
+//
+// To answer with the upstream status but none of its content, register a
+// consumer mapper for received problems:
+//
+//	prblm.As(func(r *prblm.Received) *prblm.Problem {
+//		if s := r.Problem.Status; s >= 400 && s < 500 {
+//			return prblm.New(s) // the status, without the upstream detail
+//		}
+//
+//		return nil // the default 502
+//	})
 type Received struct { //nolint:errname // named for where the problem came from, not for being an error
 	// Problem is the problem as the other service sent it.
 	Problem Problem

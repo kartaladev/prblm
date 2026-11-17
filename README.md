@@ -99,8 +99,10 @@ error as returned.
   reported by the `Is` method of your own error type. Test for it with `errors.Is`, not `==`.
 - Your own code comes first: a problem or describer in the chain, a scoped mapper or a consumer
   mapper such as `prblm.Is(prblm.ErrNotFound, ...)` replaces the default problem. It matches
-  anywhere in the chain, even inside an outer sentinel, and a wrapped problem from `prblm.Parse`
-  answers with its own status and detail.
+  anywhere in the chain, even inside an outer sentinel.
+- A problem received from another service, as `prblm.Parse` returns it, reports `ErrBadGateway`
+  at its position in the chain, so the rules here cover it, and none of its content reaches the
+  client (see [Clients and tests](#clients-and-tests)).
 - Between a sentinel and a status hint, the outer one decides: `prblm.WithStatus(prblm.ErrNotFound, 410)`
   is a 410, and so is gin's `c.AbortWithError(410, err)` when `err` wraps `ErrNotFound`.
 - When an error matches several sentinels, the first one found wins, in the order `errors.Is`
@@ -387,13 +389,38 @@ for any other response, reads at most 1 MiB and always closes the body. *(Mirror
 `ExampleParse`.)*
 
 ```go
-p, err := prblm.Parse(res) // closes the body
+r, err := prblm.Parse(res) // closes the body
 if errors.Is(err, prblm.ErrNotProblem) {
 	fmt.Println("not a problem response")
 
 	return
 }
+
+fmt.Println(r.Problem.Status, r.Problem.Title)
 ```
+
+`Parse` returns a `*Received`, which holds the decoded problem in its `Problem` field. A received
+problem is an error, but not a `Describer`: a gateway can return it, or wrap it, and the client
+never sees what the other service wrote. It reports `ErrBadGateway`, so with zero configuration
+the client gets a 502 `about:blank` problem with the fixed detail, and the `OnError` hook gets the
+error as returned, upstream problem included. Relaying the upstream problem as it is, detail and
+extension members included, is a deliberate `return &r.Problem`. *(Mirrors `ExampleReceived`.)*
+
+```go
+gateway := h.Wrap(func(http.ResponseWriter, *http.Request) error {
+	r, err := prblm.Parse(res)
+	if err != nil {
+		return fmt.Errorf("%w: %w", prblm.ErrBadGateway, err)
+	}
+
+	return fmt.Errorf("load vessel 7: %w", r) // a 502; nothing of r reaches the client
+})
+```
+
+To pass an upstream status through without its content, register a consumer mapper such as
+`prblm.As(func(r *prblm.Received) *prblm.Problem { ... })` (see the `Received` godoc). A problem
+decoded by hand with `json.Unmarshal` or `xml.Unmarshal` is a `*Problem`, which describes itself:
+use `Parse` for responses from other services.
 
 ## Other frameworks
 
