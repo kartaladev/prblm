@@ -27,6 +27,10 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
   fmt.Println(r.Problem.Status) // or p := &r.Problem
   ```
 
+  Client code that takes a `Parse` result out of an error chain with `errors.As(err, &p)`, where
+  `p` is a `*prblm.Problem`, no longer matches: a `*Received` doesn't unwrap to its problem. Use
+  `r *prblm.Received` as the target, then read `r.Problem`.
+
 ### Fixed
 
 - Received problems no longer leak (#8). A problem from `Parse` in an error chain, even inside an

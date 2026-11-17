@@ -105,6 +105,41 @@ func TestReceived_Is(t *testing.T) {
 	}
 }
 
+// TestReceived_As pins how client code takes a received problem out of an
+// error chain: through *Received, then its Problem field. A *Problem target
+// no longer matches a Parse result, which the CHANGELOG migration notes say.
+func TestReceived_As(t *testing.T) {
+	t.Parallel()
+
+	wrapped := fmt.Errorf("call: %w", receivedProblem(t))
+
+	t.Run("received target matches", func(t *testing.T) {
+		t.Parallel()
+
+		target, ok := errors.AsType[*prblm.Received](wrapped)
+		if !ok {
+			t.Fatal("errors.AsType[*Received] = false, want true")
+		}
+
+		got := target.Problem
+		if got.Status != 404 || got.Title != "Not Found" || got.Detail != "vessel 7 missing in db shard-3" {
+			t.Errorf("target.Problem = %d %q %q, want 404 %q %q", got.Status, got.Title, got.Detail, "Not Found", "vessel 7 missing in db shard-3")
+		}
+
+		if v, ok := got.Ext("table"); !ok || v != "vessels_shard3" {
+			t.Errorf(`target.Problem.Ext("table") = %v, %t, want "vessels_shard3", true`, v, ok)
+		}
+	})
+
+	t.Run("problem target does not match", func(t *testing.T) {
+		t.Parallel()
+
+		if p, ok := errors.AsType[*prblm.Problem](wrapped); ok {
+			t.Errorf("errors.AsType[*Problem] = true with %v, want false", p)
+		}
+	})
+}
+
 // problem-document / Scenario: Parse response.
 func TestParse(t *testing.T) {
 	t.Parallel()
