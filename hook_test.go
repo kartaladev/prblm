@@ -541,6 +541,7 @@ func TestExampleHook_NilProblem(t *testing.T) {
 	t.Parallel()
 
 	var log strings.Builder
+
 	h := prblm.NewHandler(
 		prblm.AddErrorHook(libraryAccessLog(&log)),
 		prblm.WithMappers(
