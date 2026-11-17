@@ -29,15 +29,15 @@
   - Add `ExampleAddErrorHook`, with a library hook and an application hook both called, and the output showing their order.
   - Update the README hook section.
   - CHANGELOG `[Unreleased]` Added.
-- [ ] 1.7 Verify slice 1: `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `AddErrorHook`, `isReporting`, `callHook` and `callOne` fully covered, including the no-hook, nil and panic branches. `go vet`, `golangci-lint` and gopls `go_diagnostics` on the changed files are clean. Run `go_symbol_references` on `onError` before the change, and record every report site it lists.
+- [x] 1.7 Verify slice 1: `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `AddErrorHook`, `isReporting`, `callHook` and `callOne` fully covered, including the no-hook, nil and panic branches. `go vet`, `golangci-lint` and gopls `go_diagnostics` on the changed files are clean. Run `go_symbol_references` on `onError` before the change, and record every report site it lists.
 
 ## 2. Slice: the same hooks in every adapter
 
-- [ ] 2.1 Hooks in net/http, gin and fiber (error-mapping / Scenario: Same hooks in every adapter); verify `go test -race -run TestParity_Hooks ./...` passes in `internal/paritytest` in both CI modes
+- [x] 2.1 Hooks in net/http, gin and fiber (error-mapping / Scenario: Same hooks in every adapter); verify `go test -race -run TestParity_Hooks ./...` passes in `internal/paritytest` in both CI modes
   - RED: `TestParity_Hooks`, one row per adapter, through the existing parity harness. Fails to compile before slice 1, and passes after it.
   - GREEN: no adapter code change expected. If an adapter drops options, fix that adapter.
   - REFACTOR: reuse the harness in `parity_test.go`; /simplify
-- [ ] 2.2 Verify slice 2: `internal/paritytest` passes with `-race`, and `go vet` and `golangci-lint` are clean
+- [x] 2.2 Verify slice 2: `internal/paritytest` passes with `-race`, and `go vet` and `golangci-lint` are clean
 
 ## 3. Slice: `ginprblm.ErrStatusOnly`
 

@@ -8,7 +8,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +23,7 @@ import (
 var (
 	errVesselNotFound = errors.New("vessel not found")
 	errBlacklisted    = errors.New("supplier is blacklisted")
+	errBoom           = errors.New("boom")
 )
 
 // blacklistedSupplier is the one registered type definition.
@@ -42,6 +45,7 @@ var returned = map[string]error{
 	// gin raises this case with its own hint, c.AbortWithError.
 	caseSentinelHint: prblm.WithStatus(prblm.ErrNotFound, http.StatusGone),
 	caseReceived:     fmt.Errorf("%w: %w", prblm.ErrBadGateway, receivedProblem()),
+	caseBoom:         errBoom,
 }
 
 // receivedProblem returns what prblm.Parse gives for an upstream 404 whose
@@ -76,6 +80,8 @@ const (
 	// caseReceived wraps a problem received from an upstream service in
 	// prblm.ErrBadGateway, as a gateway does.
 	caseReceived = "received"
+	// caseBoom raises errBoom, which no mapper recognizes.
+	caseBoom = "boom"
 )
 
 // The paths the servers answer the cases at, and the documentation paths.
@@ -361,6 +367,74 @@ func TestParity_Received(t *testing.T) {
 
 			if got := fetch(t, client, base, pathGateway, caseReceived, ""); got != want {
 				t.Errorf("%s sent\n got  %+v\n want %+v", name, got, want)
+			}
+		})
+	}
+}
+
+// hookLog records the names of the hooks called and the errors they
+// received, in order. Hooks run on the servers' goroutines.
+type hookLog struct {
+	mu    sync.Mutex
+	names []string
+	errs  []error
+}
+
+// named returns a hook that records its calls under name.
+func (l *hookLog) named(name string) func(context.Context, error, *prblm.Problem) {
+	return func(_ context.Context, err error, _ *prblm.Problem) {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+
+		l.names = append(l.names, name)
+		l.errs = append(l.errs, err)
+	}
+}
+
+func (l *hookLog) recorded() ([]string, []error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return slices.Clone(l.names), slices.Clone(l.errs)
+}
+
+// error-mapping / Scenario: Same hooks in every adapter.
+func TestParity_Hooks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		server func(t *testing.T, opts []prblm.Option) string
+		name   string
+	}{
+		{name: "net/http", server: netHTTPServer},
+		{name: "gin middleware", server: ginServer},
+		{name: "fiber error handler", server: fiberServer},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var l hookLog
+
+			base := tt.server(t, append(newOptions(), prblm.OnError(l.named("A")), prblm.AddErrorHook(l.named("B"))))
+
+			client := &http.Client{Transport: &http.Transport{}}
+			t.Cleanup(client.CloseIdleConnections)
+
+			if got := fetch(t, client, base, pathVessel, caseBoom, ""); got.status != http.StatusInternalServerError {
+				t.Errorf("status = %d, want 500", got.status)
+			}
+
+			names, errs := l.recorded()
+			if want := []string{"A", "B"}; !slices.Equal(names, want) {
+				t.Fatalf("hooks called %v, want %v", names, want)
+			}
+
+			for i, err := range errs {
+				if !errors.Is(err, errBoom) {
+					t.Errorf("hook %s got %v, want boom", names[i], err)
+				}
 			}
 		})
 	}
