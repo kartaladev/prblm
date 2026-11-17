@@ -28,20 +28,35 @@ var (
 // OutOfCredit is the type definition of the adapter scenarios.
 var OutOfCredit = prblm.DefineType("out-of-credit", http.StatusForbidden, "Out of credit", "")
 
-// hookRecorder records the errors an OnError hook receives, leaving out the
-// notes about consumer mistakes, which the core reports separately.
+// hookRecorder records the errors an OnError hook receives, with the
+// status of each problem (0 for a note without one).
 type hookRecorder struct {
-	errs []error
-	mu   sync.Mutex
+	errs     []error
+	statuses []int
+	mu       sync.Mutex
 }
 
 func (r *hookRecorder) option() prblm.Option {
-	return prblm.OnError(func(_ context.Context, err error, _ *prblm.Problem) {
+	return prblm.OnError(func(_ context.Context, err error, p *prblm.Problem) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 
+		status := 0
+		if p != nil {
+			status = p.Status
+		}
+
 		r.errs = append(r.errs, err)
+		r.statuses = append(r.statuses, status)
 	})
+}
+
+// problemStatuses returns the problem statuses the hook received, in order.
+func (r *hookRecorder) problemStatuses() []int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return slices.Clone(r.statuses)
 }
 
 func (r *hookRecorder) received() []error {

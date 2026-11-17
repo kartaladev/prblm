@@ -77,11 +77,11 @@ const pageStyle = "body{font-family:system-ui,sans-serif;line-height:1.5;margin:
 	"code{font-family:ui-monospace,monospace;overflow-wrap:anywhere}.description{white-space:pre-line}" +
 	"@media (prefers-color-scheme:dark){body{color:#e6edf3;background:#0d1117}}"
 
-// ErrShadowedDocumentation is wrapped by the note the [OnError] hook
-// receives when an application route answers a GET or HEAD request for
-// which discovery would have served a documentation page or the index (see
-// [Handler.NoteShadowedRoute]). Such a page cannot be reached, and the
-// library never logs, so the note makes the conflict visible. It names the
+// ErrShadowedDocumentation is wrapped by the note the hooks ([OnError] and
+// [AddErrorHook]) receive when an application route answers a GET or HEAD
+// request for which discovery would have served a documentation page or the
+// index (see [Handler.NoteShadowedRoute]). Such a page cannot be reached, and
+// the library never logs, so the note makes the conflict visible. It names the
 // route and the path, and comes with a nil problem, because the request
 // succeeded.
 var ErrShadowedDocumentation = errors.New("prblm: an application route hides type documentation")

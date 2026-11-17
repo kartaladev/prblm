@@ -10,6 +10,12 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
+### Added
+
+- `AddErrorHook`, which adds error hooks that `OnError` never replaces, so a library that wraps prblm
+  keeps its hook when its consumer passes `OnError`. Each report calls the `OnError` hook first, then
+  the added hooks in the order added, and a hook that panics no longer stops the hooks after it.
+
 ### Changed (BREAKING)
 
 - `Parse` returns a `*Received` instead of a `*Problem`. `Received` holds the decoded problem in

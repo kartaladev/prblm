@@ -22,8 +22,8 @@
 //
 // Once the handlers after it have returned, the middleware resolves the last
 // recorded error with a problem handler built from those options, so
-// mappers, enrichers, the OnError hook and content negotiation behave
-// exactly as with net/http.
+// mappers, enrichers, the hooks (OnError and AddErrorHook) and content
+// negotiation behave exactly as with net/http.
 //
 // # Aborts
 //
@@ -37,6 +37,26 @@
 // Register [Middleware] before middleware that aborts or writes: a header
 // sent before it runs can no longer be replaced.
 //
+// For a status-only abort, the hooks receive an error that matches
+// [ErrStatusOnly] with errors.Is, so a hook can tell an expected 401 or 429
+// apart from a handler error. A status of 500 or more set without a body,
+// such as c.Status(503), is a status-only abort too, so a hook should still
+// treat it as a failure:
+//
+//	prblm.OnError(func(ctx context.Context, err error, p *prblm.Problem) {
+//		if p != nil && p.Status < 500 && errors.Is(err, ginprblm.ErrStatusOnly) {
+//			logger.InfoContext(ctx, "request rejected", "status", p.Status)
+//			return
+//		}
+//		logger.ErrorContext(ctx, "request failed", "err", err)
+//	})
+//
+// gin's own answer to an unrouted request is a status-only abort as well,
+// so it matches [ErrStatusOnly] too: the 404 for a path no route claims,
+// and the 405 for a wrong method when engine.HandleMethodNotAllowed is on.
+// No handler ran for those, so a hook should not treat every ErrStatusOnly
+// below 500 as a rejection a handler made on purpose.
+//
 // # Route groups
 //
 // [Scope] attaches mappers to the routes of a group only, ahead of the
@@ -49,7 +69,7 @@
 // # Panic recovery
 //
 // Recovery is opt-in. [Recovery] turns a panic into the core's safe 500
-// problem and hands the panic value and stack to the OnError hook. Use it
+// problem and hands the panic value and stack to the hooks. Use it
 // instead of gin.Recovery(), before or after [Middleware], with the same
 // options, so panics and errors share one hook and one set of enrichers:
 //
@@ -65,7 +85,7 @@
 // the namespace path that no route claims for any method, exactly as the
 // core's [prblm.Handler.Discovery]. With engine.HandleMethodNotAllowed on, a
 // path that has a route only for another method keeps gin's 405. A route at
-// a documentation path wins, and the OnError hook receives a note wrapping
+// a documentation path wins, and the hooks receive a note wrapping
 // [prblm.ErrShadowedDocumentation] for it, once. Install Middleware with
 // engine.Use, before middleware that sets a status, so it also runs for
 // unmatched paths:

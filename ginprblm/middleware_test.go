@@ -1,6 +1,7 @@
 package ginprblm_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -495,6 +496,95 @@ func TestMiddleware_HostHeaders(t *testing.T) {
 
 			if got := decodeRecorded(t, serve(t, engine, req)).Type; got != tt.rendered {
 				t.Errorf("type = %q, want %q", got, tt.rendered)
+			}
+		})
+	}
+}
+
+// routeOK answers 200: a route that, if it ran, would give the hooks nothing.
+func routeOK(c *gin.Context) { c.Status(http.StatusOK) }
+
+// gin-adapter / Scenario: Classifying a status-only abort in a hook.
+func TestHook_StatusOnly(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		handler gin.HandlerFunc
+		name    string
+		// method and path default to GET /x, the route the handler serves.
+		method           string
+		path             string
+		calls            int
+		statusOnly       bool
+		status           int
+		methodNotAllowed bool
+	}{
+		// status-only
+		{name: "abort 401", handler: func(c *gin.Context) { c.AbortWithStatus(http.StatusUnauthorized) }, calls: 1, statusOnly: true, status: http.StatusUnauthorized},
+		{name: "abort 429", handler: func(c *gin.Context) { c.AbortWithStatus(http.StatusTooManyRequests) }, calls: 1, statusOnly: true, status: http.StatusTooManyRequests},
+		{name: "status 500 without body", handler: func(c *gin.Context) { c.Status(http.StatusInternalServerError) }, calls: 1, statusOnly: true, status: http.StatusInternalServerError},
+		// gin's own aborts: no handler runs, yet gin records a bare status
+		{name: "unrouted GET", handler: routeOK, path: "/nope", calls: 1, statusOnly: true, status: http.StatusNotFound},
+		{
+			name:    "wrong method with HandleMethodNotAllowed",
+			handler: routeOK, method: http.MethodPut, methodNotAllowed: true,
+			calls: 1, statusOnly: true, status: http.StatusMethodNotAllowed,
+		},
+		// handler errors
+		{
+			name:    "abort with error 401",
+			handler: func(c *gin.Context) { _ = c.AbortWithError(http.StatusUnauthorized, errors.New("token expired")) },
+			calls:   1, status: http.StatusUnauthorized,
+		},
+		{name: "recorded error", handler: func(c *gin.Context) { _ = c.Error(errors.New("boom")) }, calls: 1, status: http.StatusInternalServerError},
+		{
+			name:    "recorded sentinel",
+			handler: func(c *gin.Context) { _ = c.Error(fmt.Errorf("vessel 7: %w", prblm.ErrNotFound)) },
+			calls:   1, status: http.StatusNotFound,
+		},
+		{
+			name: "error after body",
+			handler: func(c *gin.Context) {
+				c.String(http.StatusOK, "partial")
+				_ = c.Error(errors.New("boom"))
+			},
+			calls: 1, status: http.StatusInternalServerError,
+		},
+		// no problem written
+		{name: "abort 200", handler: func(c *gin.Context) { c.AbortWithStatus(http.StatusOK) }},
+		{name: "status 204", handler: func(c *gin.Context) { c.Status(http.StatusNoContent) }},
+		{name: "string 500", handler: func(c *gin.Context) { c.String(http.StatusInternalServerError, "plain") }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var hook hookRecorder
+
+			engine := newEngine(tt.handler, hook.option())
+			engine.HandleMethodNotAllowed = tt.methodNotAllowed
+
+			method, path := cmp.Or(tt.method, http.MethodGet), cmp.Or(tt.path, "/x")
+			srv := httptest.NewServer(engine)
+			t.Cleanup(srv.Close)
+			do(t, srv, httptest.NewRequestWithContext(t.Context(), method, srv.URL+path, http.NoBody))
+
+			errs, statuses := hook.received(), hook.problemStatuses()
+			if len(errs) != tt.calls {
+				t.Fatalf("hook called %d times with %v, want %d", len(errs), errs, tt.calls)
+			}
+
+			if tt.calls == 0 {
+				return
+			}
+
+			if got := errors.Is(errs[0], ginprblm.ErrStatusOnly); got != tt.statusOnly {
+				t.Errorf("errors.Is(%v, ErrStatusOnly) = %t, want %t", errs[0], got, tt.statusOnly)
+			}
+
+			if statuses[0] != tt.status {
+				t.Errorf("problem status = %d, want %d", statuses[0], tt.status)
 			}
 		})
 	}

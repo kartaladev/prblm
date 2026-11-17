@@ -5,25 +5,39 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/kartaladev/prblm"
 )
 
-// hookCall is one call of the OnError hook.
+// hookCall is one call of a hook.
 type hookCall struct {
-	err    error
+	err error
+	// name is the name of the hook called, or "" for recorder.hook.
+	name   string
 	status int
 }
 
-// recorder records OnError hook calls.
+// recorder records hook calls, in the order they happen.
 type recorder struct {
 	mu    sync.Mutex
 	calls []hookCall
 }
 
+// hook is a hook that records its calls without a name.
 func (r *recorder) hook(_ context.Context, err error, p *prblm.Problem) {
+	r.record("", err, p)
+}
+
+// named returns a hook that records its calls under name.
+func (r *recorder) named(name string) func(context.Context, error, *prblm.Problem) {
+	return func(_ context.Context, err error, p *prblm.Problem) { r.record(name, err, p) }
+}
+
+func (r *recorder) record(name string, err error, p *prblm.Problem) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -32,14 +46,14 @@ func (r *recorder) hook(_ context.Context, err error, p *prblm.Problem) {
 		status = p.Status
 	}
 
-	r.calls = append(r.calls, hookCall{err: err, status: status})
+	r.calls = append(r.calls, hookCall{err: err, name: name, status: status})
 }
 
 func (r *recorder) recorded() []hookCall {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return append([]hookCall(nil), r.calls...)
+	return slices.Clone(r.calls)
 }
 
 // write sends err through h.Wrap for GET /v1/vessels/7 and returns the
@@ -223,5 +237,333 @@ func TestResolve_FaultyConsumer_NoHook(t *testing.T) {
 
 	if rec := write(t, h, errVesselNotFound); rec.Code != 409 {
 		t.Errorf("status = %d, want 409", rec.Code)
+	}
+}
+
+// names returns the names of the hooks called, in order.
+func names(calls []hookCall) []string {
+	out := make([]string, 0, len(calls))
+	for _, c := range calls {
+		out = append(out, c.name)
+	}
+
+	return out
+}
+
+// panicHook returns a hook that panics with value, nil included.
+func panicHook(value any) func(context.Context, error, *prblm.Problem) {
+	return func(context.Context, error, *prblm.Problem) { panic(value) }
+}
+
+// hookCase is a row of a scenario about the order of the hooks.
+type hookCase struct {
+	opts  func(r *recorder) []prblm.Option
+	name  string
+	calls []string
+}
+
+// checkHookCases runs each case: a handler built with the case's options
+// and then extra writes err, the response status must be status, and the
+// recording hooks must be called in the order of calls, each with err and
+// status.
+func checkHookCases(t *testing.T, err error, status int, extra []prblm.Option, tests []hookCase) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			rec := write(t, prblm.NewHandler(append(tt.opts(&r), extra...)...), err)
+			if rec.Code != status {
+				t.Errorf("status = %d, want %d", rec.Code, status)
+			}
+
+			calls := r.recorded()
+			if got := names(calls); !slices.Equal(got, tt.calls) {
+				t.Fatalf("hooks called %v, want %v", got, tt.calls)
+			}
+
+			for _, c := range calls {
+				//nolint:errorlint // each hook must receive the original error value itself.
+				if c.err != err || c.status != status {
+					t.Errorf("hook %s got %v with status %d, want %v with %d", c.name, c.err, c.status, err, status)
+				}
+			}
+		})
+	}
+}
+
+// error-mapping / Scenario: Replaced and added hooks (Examples: registered).
+func TestHooks_Order(t *testing.T) {
+	t.Parallel()
+
+	checkHookCases(t, errors.New("boom"), http.StatusInternalServerError, nil, []hookCase{
+		{
+			name:  "OnError only",
+			opts:  func(r *recorder) []prblm.Option { return []prblm.Option{prblm.OnError(r.named("A"))} },
+			calls: []string{"A"},
+		},
+		{
+			name:  "AddErrorHook only",
+			opts:  func(r *recorder) []prblm.Option { return []prblm.Option{prblm.AddErrorHook(r.named("B"))} },
+			calls: []string{"B"},
+		},
+		{
+			name: "OnError then two added",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(r.named("A")), prblm.AddErrorHook(r.named("B")), prblm.AddErrorHook(r.named("C"))}
+			},
+			calls: []string{"A", "B", "C"},
+		},
+		{
+			name: "added before OnError",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.AddErrorHook(r.named("B")), prblm.OnError(r.named("A"))}
+			},
+			calls: []string{"A", "B"},
+		},
+		{
+			name: "OnError replaced",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(r.named("A")), prblm.OnError(r.named("A2")), prblm.AddErrorHook(r.named("B"))}
+			},
+			calls: []string{"A2", "B"},
+		},
+		{
+			name: "same hook added twice",
+			opts: func(r *recorder) []prblm.Option {
+				b := r.named("B")
+
+				return []prblm.Option{prblm.AddErrorHook(b), prblm.AddErrorHook(b)}
+			},
+			calls: []string{"B", "B"},
+		},
+	})
+}
+
+// error-mapping / Scenario: Replaced and added hooks (Examples: misuse).
+func TestHooks_Misuse(t *testing.T) {
+	t.Parallel()
+
+	checkHookCases(t, errors.New("boom"), http.StatusInternalServerError, nil, []hookCase{
+		{
+			name: "OnError(nil) keeps added hooks",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.AddErrorHook(r.named("B")), prblm.OnError(nil)}
+			},
+			calls: []string{"B"},
+		},
+		{
+			name: "OnError(nil) clears OnError",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(r.named("A")), prblm.OnError(nil)}
+			},
+		},
+		{
+			name: "nil added hook",
+			opts: func(*recorder) []prblm.Option { return []prblm.Option{prblm.AddErrorHook(nil)} },
+		},
+		{
+			name: "nil added hook among others",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(r.named("A")), prblm.AddErrorHook(nil), prblm.AddErrorHook(r.named("C"))}
+			},
+			calls: []string{"A", "C"},
+		},
+	})
+}
+
+// error-mapping / Scenario: Replaced and added hooks (Examples: misuse,
+// AddErrorHook(nil)). With no non-nil hook a handler reports nothing, so
+// nobody builds a note that nobody reads.
+func TestAddErrorHook_NilIsNotReporting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []prblm.Option
+		want bool
+	}{
+		{name: "no hooks"},
+		{name: "nil added hook", opts: []prblm.Option{prblm.AddErrorHook(nil)}},
+		{name: "added hook", opts: []prblm.Option{prblm.AddErrorHook(func(context.Context, error, *prblm.Problem) {})}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := prblm.IsReporting(t.Context(), prblm.NewHandler(tt.opts...)); got != tt.want {
+				t.Errorf("isReporting = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
+// error-mapping / Scenario: A panicking hook does not silence the others.
+func TestHooks_Panic(t *testing.T) {
+	t.Parallel()
+
+	conflict := []prblm.Option{prblm.WithMappers(prblm.Status(errVesselNotFound, 409))}
+
+	checkHookCases(t, errVesselNotFound, http.StatusConflict, conflict, []hookCase{
+		{
+			name: "OnError hook panics first",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(panicHook("boom")), prblm.AddErrorHook(r.named("B"))}
+			},
+			calls: []string{"B"},
+		},
+		{
+			name: "added hook panics in the middle",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(r.named("A")), prblm.AddErrorHook(panicHook("boom")), prblm.AddErrorHook(r.named("C"))}
+			},
+			calls: []string{"A", "C"},
+		},
+		{
+			name: "last hook panics with nil",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.AddErrorHook(r.named("B")), prblm.AddErrorHook(panicHook(nil))}
+			},
+			calls: []string{"B"},
+		},
+		{
+			name: "added hook panics with ErrAbortHandler",
+			opts: func(r *recorder) []prblm.Option {
+				return []prblm.Option{prblm.OnError(r.named("A")), prblm.AddErrorHook(panicHook(http.ErrAbortHandler)), prblm.AddErrorHook(r.named("C"))}
+			},
+			calls: []string{"A", "C"},
+		},
+	})
+}
+
+// error-mapping / Scenario: Every hook receives notes and silent requests
+// reach none.
+func TestHooks_Notes(t *testing.T) {
+	t.Parallel()
+
+	isPanic := func(err error) bool { _, ok := errors.AsType[*prblm.PanicError](err); return ok }
+	isInvalidStatus := func(err error) bool { return errors.Is(err, prblm.ErrInvalidStatus) }
+	//nolint:errorlint // the answered error must be the original value itself.
+	isErrX := func(err error) bool { return err == errVesselNotFound }
+
+	// writeErrX has the handler write ErrX through net/http.
+	writeErrX := func(t *testing.T, h *prblm.Handler) { t.Helper(); write(t, h, errVesselNotFound) }
+
+	// discoverUnknown asks discovery for an unknown type, which is a 404.
+	discoverUnknown := func(t *testing.T, h *prblm.Handler) {
+		t.Helper()
+
+		if rec := discover(t, h, http.MethodGet, "/problems/unknown", nil); rec.Code != http.StatusNotFound {
+			t.Errorf("discovery status = %d, want 404", rec.Code)
+		}
+	}
+
+	tests := []struct {
+		event    func(t *testing.T, h *prblm.Handler)
+		name     string
+		opts     []prblm.Option
+		received []func(error) bool
+	}{
+		{
+			name: "registered mapper panics",
+			opts: []prblm.Option{prblm.WithMappers(
+				prblm.MapperFunc(func(context.Context, error) *prblm.Problem { panic("mapper broke") }),
+				prblm.Status(errVesselNotFound, 409),
+			)},
+			event:    writeErrX,
+			received: []func(error) bool{isPanic, isErrX},
+		},
+		{
+			name:     "mapper returns status 200",
+			opts:     []prblm.Option{prblm.WithMappers(prblm.Status(errVesselNotFound, 200))},
+			event:    writeErrX,
+			received: []func(error) bool{isInvalidStatus, isErrX},
+		},
+		{
+			name:  "discovery answers an unknown type with 404",
+			opts:  []prblm.Option{prblm.WithNamespace("/problems"), prblm.WithTypes(blacklistedSupplier)},
+			event: discoverUnknown,
+		},
+		{
+			// A plain discovery 404 reports nothing at all, so this row
+			// makes the silent request produce a note first.
+			name: "discovery 404 with a panicking enricher",
+			opts: []prblm.Option{
+				prblm.WithNamespace("/problems"),
+				prblm.WithTypes(blacklistedSupplier),
+				prblm.WithEnrichers(func(context.Context, *prblm.Problem) { panic("enricher broke") }),
+			},
+			event: discoverUnknown,
+		},
+		{
+			name:  "nil error",
+			event: func(t *testing.T, h *prblm.Handler) { t.Helper(); write(t, h, nil) },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			h := prblm.NewHandler(append(tt.opts, prblm.OnError(r.named("A")), prblm.AddErrorHook(r.named("B")))...)
+			tt.event(t, h)
+
+			byHook := map[string][]error{}
+			for _, c := range r.recorded() {
+				byHook[c.name] = append(byHook[c.name], c.err)
+			}
+
+			for _, name := range []string{"A", "B"} {
+				got := byHook[name]
+				if len(got) != len(tt.received) {
+					t.Fatalf("hook %s received %v, want %d calls", name, got, len(tt.received))
+				}
+
+				for i, matches := range tt.received {
+					if !matches(got[i]) {
+						t.Errorf("hook %s call %d received %v, which does not match", name, i, got[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+// The documented library hook of ExampleAddErrorHook must survive the nil
+// problem of a panic note, or a consumer who copies it loses that record.
+func TestExampleHook_NilProblem(t *testing.T) {
+	t.Parallel()
+
+	var log strings.Builder
+
+	h := prblm.NewHandler(
+		prblm.AddErrorHook(libraryAccessLog(&log)),
+		prblm.WithMappers(
+			prblm.MapperFunc(func(context.Context, error) *prblm.Problem { panic("mapper broke") }),
+			prblm.Status(errVesselNotFound, 409),
+		),
+	)
+
+	if rec := write(t, h, errVesselNotFound); rec.Code != 409 {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+
+	lines := strings.Split(strings.TrimSuffix(log.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("access log = %q, want a line for the panic note and one for the 409", lines)
+	}
+
+	if !strings.HasPrefix(lines[0], "library note: ") {
+		t.Errorf("first line = %q, want the panic note", lines[0])
+	}
+
+	if want := "library access log: 409"; lines[1] != want {
+		t.Errorf("last line = %q, want %q", lines[1], want)
 	}
 }

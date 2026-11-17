@@ -11,10 +11,10 @@ import (
 	"strings"
 )
 
-// ErrInvalidStatus is wrapped by the note the [OnError] hook receives when a
-// resolved problem had a status outside 400–599 and 500 was sent instead.
-// It is a mistake in a mapper or describer, so a hook can tell it apart
-// from the error being answered with errors.Is.
+// ErrInvalidStatus is wrapped by the note the hooks ([OnError] and
+// [AddErrorHook]) receive when a resolved problem had a status outside 400–599
+// and 500 was sent instead. It is a mistake in a mapper or describer, so a hook
+// can tell it apart from the error being answered with errors.Is.
 var ErrInvalidStatus = errors.New("prblm: problem status is not an error status")
 
 // Handler resolves errors into problems. Create it with [NewHandler].
@@ -26,6 +26,9 @@ type Handler struct {
 	enrichers []func(ctx context.Context, p *Problem)
 	// onError is the hook set with OnError, or nil.
 	onError func(ctx context.Context, err error, p *Problem)
+	// hooks are the non-nil hooks added with AddErrorHook, in order. They run
+	// after onError.
+	hooks []func(ctx context.Context, err error, p *Problem)
 	// namespace is the namespace set with WithNamespace: as given until
 	// NewHandler checks it, then without its trailing slash, or "" for none.
 	namespace string
@@ -97,14 +100,14 @@ func NewHandler(opts ...Option) *Handler {
 //
 // The result is always a new problem that the caller may modify: a matched
 // problem is copied, so problems shared between requests (for example
-// package-level values) are never changed. A status outside 400–599 is
-// replaced by 500, because a problem response must be an error; unless the
-// status was missing, the mistake is reported to the [OnError] hook. An
-// about:blank problem without a title gets the HTTP reason phrase of its
+// package-level values) are never changed. A status outside 400–599 is replaced
+// by 500, because a problem response must be an error; unless the status was
+// missing, the mistake is reported to the hooks ([OnError] and [AddErrorHook]).
+// An about:blank problem without a title gets the HTTP reason phrase of its
 // status. Then the enrichers run (see [WithEnrichers]), and last the type is
-// resolved against the namespace (see [WithNamespace]), so a type an
-// enricher sets is resolved too. A type that becomes about:blank loses its
-// title, which then becomes the reason phrase as well.
+// resolved against the namespace (see [WithNamespace]), so a type an enricher
+// sets is resolved too. A type that becomes about:blank loses its title, which
+// then becomes the reason phrase as well.
 func (h *Handler) Resolve(ctx context.Context, err error) *Problem {
 	if err == nil {
 		return nil
@@ -180,7 +183,7 @@ func (h *Handler) complete(ctx context.Context, p *Problem) {
 }
 
 // normalize replaces a status outside 400–599 with 500. A missing status is
-// an ordinary default; any other is a mistake, reported to the OnError hook.
+// an ordinary default; any other is a mistake, reported to the hooks.
 func (h *Handler) normalize(ctx context.Context, p *Problem) {
 	if isErrorStatus(p.Status) {
 		return
@@ -272,9 +275,9 @@ func (h *Handler) noteType(ctx context.Context, sentinel error, typ string, p *P
 	h.callHook(ctx, fmt.Errorf("%w: %q", sentinel, typ), p)
 }
 
-// report calls the OnError hook, if any and unless ctx is silenced. A hook
-// that panics is ignored: there is nowhere left to report it, and the
-// response must still go out.
+// report calls the hooks (the OnError hook, then the added ones), if there
+// are any and unless ctx is silenced. A hook that panics is ignored: there
+// is nowhere left to report it, and the response must still go out.
 func (h *Handler) report(ctx context.Context, err error, p *Problem) {
 	if h.isReporting(ctx) {
 		h.callHook(ctx, err, p)
@@ -286,15 +289,30 @@ func (h *Handler) report(ctx context.Context, err error, p *Problem) {
 // check it before building a report, so nobody pays for one that nobody
 // reads.
 func (h *Handler) isReporting(ctx context.Context) bool {
-	return h.onError != nil && !isSilent(ctx)
+	return (h.onError != nil || len(h.hooks) > 0) && !isSilent(ctx)
 }
 
-// callHook calls the OnError hook, which the caller has checked with
-// isReporting. A hook that panics is ignored.
+// callHook calls the OnError hook, if any, and then the added hooks, in
+// order. The caller has checked isReporting. A hook that panics is ignored,
+// and the hooks after it are still called.
 func (h *Handler) callHook(ctx context.Context, err error, p *Problem) {
+	if h.onError != nil {
+		callOne(ctx, h.onError, err, p)
+	}
+
+	for _, hook := range h.hooks {
+		callOne(ctx, hook, err, p)
+	}
+}
+
+// callOne calls one hook with the report and ignores its panic, whatever
+// the value, http.ErrAbortHandler included: a hook runs outside the
+// application's control flow, so it cannot abort the response, and there is
+// nowhere left to report the panic.
+func callOne(ctx context.Context, hook func(context.Context, error, *Problem), err error, p *Problem) {
 	defer func() { _ = recover() }()
 
-	h.onError(ctx, err, p)
+	hook(ctx, err, p)
 }
 
 // Responding: turning a resolved problem into a response.
@@ -317,7 +335,7 @@ func (h *Handler) callHook(ctx context.Context, err error, p *Problem) {
 // infinite number, or a name XML cannot carry) is never sent in part: the
 // response becomes the constant minimal JSON problem
 // {"title":"Internal Server Error","status":500}, whatever the format, and
-// the failure goes to the [OnError] hook.
+// the failure goes to the hooks ([OnError] and [AddErrorHook]).
 func (h *Handler) Respond(ctx context.Context, req Request, err error) (Response, bool) {
 	if err == nil {
 		return Response{}, false
@@ -331,7 +349,7 @@ func (h *Handler) Respond(ctx context.Context, req Request, err error) (Response
 // respondPanic renders a recovered panic as the response for req. A panic is
 // never mapped like a returned error: whatever its value, the problem is the
 // safe 500 fallback, completed by the enrichers and rendered like any other.
-// The OnError hook receives pe.
+// The hooks receive pe.
 func (h *Handler) respondPanic(ctx context.Context, req Request, pe *PanicError) Response {
 	ctx = withRequest(ctx, req)
 
@@ -343,7 +361,7 @@ func (h *Handler) respondPanic(ctx context.Context, req Request, pe *PanicError)
 
 // respond renders p, the problem resolved for err, as the response for req:
 // it negotiates the format, encodes p (falling back to the minimal problem)
-// and reports err to the OnError hook with the problem being sent.
+// and reports err to the hooks with the problem being sent.
 func (h *Handler) respond(ctx context.Context, req Request, err error, p *Problem) Response {
 	res, sent := h.render(ctx, req, p)
 	h.report(ctx, err, sent)
@@ -371,7 +389,7 @@ func (h *Handler) render(ctx context.Context, req Request, p *Problem) (Response
 
 // encode encodes p in format f and reports whether it succeeded. A failure,
 // including a panic in the encoder of an extension value, is reported to the
-// OnError hook, so the response can fall back to the minimal problem without
+// hooks, so the response can fall back to the minimal problem without
 // losing the reason.
 func (h *Handler) encode(ctx context.Context, f *format, p *Problem) ([]byte, bool) {
 	var (
@@ -401,10 +419,10 @@ func (h *Handler) encode(ctx context.Context, f *format, p *Problem) ([]byte, bo
 //
 // Wrap watches what fn writes. When fn has already started the response (it
 // wrote a status other than 1xx, wrote body bytes, flushed or hijacked the
-// connection), the error is still reported to the [OnError] hook but nothing
-// more is written: the client has the start of another response, and
-// appending a problem would corrupt it. Headers fn set without writing are
-// kept, except those the problem response controls.
+// connection), the error is still reported to the hooks ([OnError] and
+// [AddErrorHook]) but nothing more is written: the client has the start of
+// another response, and appending a problem would corrupt it. Headers fn set
+// without writing are kept, except those the problem response controls.
 //
 // Wrap panics when h or fn is nil, so the mistake shows at startup rather
 // than on the first request.
@@ -426,7 +444,8 @@ func (h *Handler) Wrap(fn func(http.ResponseWriter, *http.Request) error) http.H
 //
 // Write cannot see what was written to w before it was called, so it assumes
 // nothing was, unless w comes from [Handler.Wrap]: then a response that has
-// already started is left alone, and err only reaches the [OnError] hook.
+// already started is left alone, and err only reaches the hooks ([OnError] and
+// [AddErrorHook]).
 //
 // Write panics when h is nil.
 func (h *Handler) Write(w http.ResponseWriter, r *http.Request, err error) {
@@ -435,7 +454,7 @@ func (h *Handler) Write(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // answer writes the problem response for err to tw, unless tw has already
-// started its response; the error reaches the OnError hook even then. The
+// started its response; the error reaches the hooks even then. The
 // response goes through tw, which marks it started, so an error is never
 // answered twice.
 func (h *Handler) answer(tw *trackingWriter, r *http.Request, err error) {
@@ -451,18 +470,18 @@ func (h *Handler) answer(tw *trackingWriter, r *http.Request, err error) {
 // response. It is opt-in: [Handler.Wrap] alone lets panics reach net/http,
 // so existing recovery middleware keeps working.
 //
-// The problem is the safe fallback, whatever the panic value: status 500,
-// title "Internal Server Error" and no detail, rendered like any other
-// problem (enrichers, negotiated format, headers). The value never reaches
-// the client; the [OnError] hook receives it as a [*PanicError].
+// The problem is the safe fallback, whatever the panic value: status 500, title
+// "Internal Server Error" and no detail, rendered like any other problem
+// (enrichers, negotiated format, headers). The value never reaches the client;
+// the hooks ([OnError] and [AddErrorHook]) receive it as a [*PanicError].
 //
 // A panic with [http.ErrAbortHandler] itself is passed on unchanged, so
 // net/http aborts the response as designed; it is not reported. When the
 // handler has already started the response, or the panic shows the client
-// connection is broken (EPIPE, ECONNRESET), nothing is written and the hook
-// receives the panic with a nil problem.
+// connection is broken (EPIPE, ECONNRESET), nothing is written and the hooks
+// receive the panic with a nil problem.
 //
-// Enrichers and the hook see the context of the request Recover received,
+// Enrichers and the hooks see the context of the request Recover received,
 // not values that middleware inside it added before the panic: install
 // Recover inside middleware whose context values they need.
 //
@@ -713,13 +732,13 @@ func (h *Handler) serveDiscovery(w http.ResponseWriter, r *http.Request) {
 // request as usual.
 //
 // Otherwise the response is the documentation or the index, negotiated by
-// req.Accept, a 304 when req.IfNoneMatch matches its ETag, or a 404 problem
-// for a path that names no registered type. The path is matched exactly in
-// its escaped form, so a sub-type spelled with escapes ("%2D"), a malformed
-// escape ("%zz") or a traversal ("%2e%2e") is a 404, and every page has
-// exactly one URL. For HEAD the body is empty and the headers are those of
-// the GET. The problems discovery sends never reach the [OnError] hook,
-// because no application error occurred.
+// req.Accept, a 304 when req.IfNoneMatch matches its ETag, or a 404 problem for
+// a path that names no registered type. The path is matched exactly in its
+// escaped form, so a sub-type spelled with escapes ("%2D"), a malformed escape
+// ("%zz") or a traversal ("%2e%2e") is a 404, and every page has exactly one
+// URL. For HEAD the body is empty and the headers are those of the GET. The
+// problems discovery sends never reach the hooks ([OnError] and
+// [AddErrorHook]), because no application error occurred.
 //
 // RespondDiscovery panics when h is nil.
 func (h *Handler) RespondDiscovery(ctx context.Context, req DiscoveryRequest) (Response, bool) {
@@ -741,15 +760,15 @@ func (h *Handler) RespondDiscovery(ctx context.Context, req DiscoveryRequest) (R
 	return headless(req.Method, res), true
 }
 
-// NoteShadowedRoute reports that req was answered by the application route
-// with the pattern route, so the OnError hook learns when that route hides
-// type documentation. A framework adapter calls it for every request a
-// route answers, with the route's pattern (gin's c.FullPath(), fiber's
-// c.Route().Path); net/http gives no such hook point. Only req.Method and
-// req.Path are read, so an adapter need not read the headers.
+// NoteShadowedRoute reports that req was answered by the application route with
+// the pattern route, so the hooks ([OnError] and [AddErrorHook]) learn when
+// that route hides type documentation. A framework adapter calls it for every
+// request a route answers, with the route's pattern (gin's c.FullPath(),
+// fiber's c.Route().Path); net/http gives no such hook point. Only req.Method
+// and req.Path are read, so an adapter need not read the headers.
 //
 // When discovery would have served a documentation page or the index for
-// req, the hook receives a note wrapping [ErrShadowedDocumentation] that
+// req, the hooks receive a note wrapping [ErrShadowedDocumentation] that
 // names the route and the path, with a nil problem. Each route is noted
 // once, at its first conflicting request, so one conflict cannot flood the
 // log, and at most 256 routes are noted. There is no note when discovery is
@@ -788,7 +807,7 @@ func (h *Handler) discoveryFor(req DiscoveryRequest) *discovery {
 
 // discoveryProblem renders p as the answer to the discovery request req,
 // completed and rendered like any other problem, but answered silently:
-// the OnError hook is not called, not even for a note about a faulty
+// no hook is called, not even for a note about a faulty
 // enricher or a failed encoding, because no application error occurred.
 // The instance is the path as the client sent it.
 func (h *Handler) discoveryProblem(ctx context.Context, req DiscoveryRequest, p *Problem) Response {

@@ -57,6 +57,37 @@ func ExampleMiddleware_abort() {
 	// 401 application/problem+json {"title":"Unauthorized","status":401,"instance":"/v1/reports"}
 }
 
+func ExampleErrStatusOnly() {
+	hook := prblm.OnError(func(_ context.Context, err error, p *prblm.Problem) {
+		switch {
+		case p == nil:
+			// A note without a problem, such as a panic in a mapper.
+			fmt.Println("note:", err)
+		case errors.Is(err, ginprblm.ErrStatusOnly) && p.Status < http.StatusInternalServerError:
+			// An expected abort, such as a 401: an ordinary response.
+			fmt.Println("status-only abort:", p.Status)
+		default:
+			// A handler error, or a bare 5xx status: a failure.
+			fmt.Println("failure:", p.Status, err)
+		}
+	})
+
+	engine := gin.New()
+	engine.Use(ginprblm.Middleware(hook))
+	engine.GET("/v1/reports", func(c *gin.Context) { c.AbortWithStatus(http.StatusUnauthorized) })
+	engine.GET("/v1/exports", func(c *gin.Context) { c.Status(http.StatusServiceUnavailable) })
+	engine.GET("/v1/vessels/:id", func(c *gin.Context) { _ = c.Error(errors.New("pq: connection refused")) })
+
+	for _, target := range []string{"/v1/reports", "/v1/exports", "/v1/vessels/7"} {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody)
+		engine.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	// Output:
+	// status-only abort: 401
+	// failure: 503 ginprblm: response aborted with an error status and no error
+	// failure: 500 pq: connection refused
+}
+
 func ExampleRecovery() {
 	logProblem := func(_ context.Context, err error, _ *prblm.Problem) {
 		if pe, ok := errors.AsType[*prblm.PanicError](err); ok {

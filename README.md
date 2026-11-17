@@ -339,6 +339,28 @@ or an error wrapping `ErrEncoding` for a problem that could not be encoded. A no
 request that succeeded, with no answered error after it. Tell them apart from the error being answered with `errors.Is` and `errors.As`.
 Mappers, enrichers and the hook may panic without breaking the response.
 
+`OnError` sets the one replaceable hook: a later `OnError` replaces an earlier one. A library that
+wraps prblm, and passes its consumer's options on, adds its own hook with `AddErrorHook` instead, so
+the consumer's `OnError` can't replace it. Every report calls the `OnError` hook first, then the added
+hooks in the order added, all with the same arguments and the same problem, which none of them may
+modify. That problem is nil for the panic and shadowed-documentation notes, and for a handler panic
+`Recover` catches after the response started, so a hook checks it.
+A hook that panics is ignored, and the hooks after it are still called. *(Mirrors
+`ExampleAddErrorHook`.)*
+
+```go
+// In the library:
+opts = append(opts, prblm.AddErrorHook(func(ctx context.Context, err error, p *prblm.Problem) {
+	if p == nil { // a note with no problem: a panic in consumer code, a shadowed route
+		accessLog.Note(ctx, err)
+
+		return
+	}
+
+	accessLog.Record(ctx, p.Status, err)
+}))
+```
+
 ## Panic recovery
 
 Recovery is opt-in, so it never competes with recovery middleware you already have. `Recover`
@@ -490,10 +512,15 @@ engine.GET("/v1/reports", func(c *gin.Context) {
 - `c.AbortWithError(403, err)`: the abort status is a hint, used only when no mapper or
   self-describing error recognizes `err`. A status below 400 is no hint.
 - `c.AbortWithStatus(401)`, or a status of 400 or above with no body: an `about:blank` problem
-  for that status.
+  for that status. The hooks receive an error that matches `ginprblm.ErrStatusOnly` with
+  `errors.Is`, so they can tell it apart from a handler error. A bare 5xx status is covered too,
+  so a hook should still treat a problem status of 500 or more as a failure. gin's own 404 for a
+  path no route claims, and its 405 with `HandleMethodNotAllowed`, match `ErrStatusOnly` as well:
+  no handler ran for those, so not every `ErrStatusOnly` below 500 is a deliberate rejection.
+  *(Mirrors `ExampleErrStatusOnly`.)*
 - Statuses below 400, responses with a body (`c.JSON`, `c.AbortWithStatusJSON`), streams
   (flushed responses, server-sent events) and hijacked connections (websockets) are sent
-  unchanged; a recorded error then only reaches the `OnError` hook.
+  unchanged; a recorded error then only reaches the hooks (`OnError` and `AddErrorHook`).
 
 **Registration order:** register `Middleware` before any middleware that aborts or writes.
 Middleware that runs earlier and sends the header first leaves nothing to replace: the error then
@@ -502,7 +529,7 @@ sets a status (`c.Status`): that replaces the 404 gin records for a path no rout
 documentation is then not served.
 
 **Recovery and route groups:** `ginprblm.Recovery(opts...)` turns panics into the safe 500 problem
-and gives the panic value and stack to the `OnError` hook. Use it instead of `gin.Recovery()`,
+and gives the panic value and stack to the hooks (`OnError` and `AddErrorHook`). Use it instead of `gin.Recovery()`,
 before or after `Middleware`, and pass both the same options so they share the hook, enrichers and
 namespace. `ginprblm.Scope(mappers...)` attaches mappers to a route group only
 (mirrored by `ExampleRecovery` and `ExampleScope`):
@@ -560,7 +587,7 @@ message (`Cannot GET /x`, or `fiber.NewError(403, "token abc expired")`) is neve
 
 **Recovery and route groups:** `fiberprblm.Recovery()` turns a panic into an error returned to the
 error handler; pair it with `ErrorHandler` to get the safe 500 problem and the panic value and
-stack in the `OnError` hook. With fiber's default error handler, the client gets a plain-text 500
+stack in the hooks (`OnError` and `AddErrorHook`). With fiber's default error handler, the client gets a plain-text 500
 `Internal Server Error`, and the panic value never leaks either. `fiberprblm.Scope(mappers...)`
 attaches mappers to a route group only (mirrored by `ExampleRecovery` and `ExampleScope`):
 

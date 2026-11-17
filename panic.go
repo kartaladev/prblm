@@ -6,8 +6,8 @@ import (
 	"runtime/debug"
 )
 
-// PanicError is a recovered panic, reported to the [OnError] hook. It never
-// reaches the client.
+// PanicError is a recovered panic, reported to the hooks ([OnError] and
+// [AddErrorHook]). It never reaches the client.
 type PanicError struct {
 	// Value is the value passed to panic.
 	Value any
@@ -30,7 +30,7 @@ func (e *PanicError) Unwrap() error {
 }
 
 // safeCall runs consumer code. A panic in fn is recovered and reported to the
-// OnError hook as a *PanicError, and safeCall then returns the zero value, so
+// hooks as a *PanicError, and safeCall then returns the zero value, so
 // faulty consumer code cannot break the response. The stack is only captured
 // when a hook will receive it.
 func safeCall[T any](ctx context.Context, h *Handler, fn func() T) T {
