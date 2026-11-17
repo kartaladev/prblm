@@ -33,7 +33,7 @@ The core also has micro-benchmarks of its hot paths:
 |---|---|---|
 | `BenchmarkResolve` | `mapped`, `fallback` | `bench_test.go` |
 | `BenchmarkRespond` | `json`, `xml` | `bench_test.go` |
-| `BenchmarkNegotiate` | `empty`, `browser`, `xml`, `malformed` (the `Accept` header) | `respond_internal_test.go` |
+| `BenchmarkNegotiate` | `empty`, `any` (`*/*`), `json` (`application/json`), `browser`, `xml`, `malformed` (the `Accept` header) | `respond_internal_test.go` |
 | `BenchmarkIsSubtype` | | `namespace_internal_test.go` |
 | `BenchmarkResolveType` | `resolved`, `kept`, `invalid`, `undocumented` | `namespace_internal_test.go` |
 

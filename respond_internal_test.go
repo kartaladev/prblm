@@ -27,6 +27,8 @@ func BenchmarkNegotiate(b *testing.B) {
 		want   string
 	}{
 		{name: "empty", accept: "", want: mediaTypeJSON},
+		{name: "any", accept: "*/*", want: mediaTypeJSON},
+		{name: "json", accept: "application/json", want: mediaTypeJSON},
 		{name: "browser", accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", want: mediaTypeXML},
 		{name: "xml", accept: mediaTypeXML, want: mediaTypeXML},
 		{name: "malformed", accept: ";;;", want: mediaTypeJSON},
