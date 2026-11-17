@@ -199,6 +199,26 @@ func fiberServer(t *testing.T, opts []prblm.Option) string {
 	return "http://" + ln.Addr().String()
 }
 
+// newServers starts a server per adapter, all built from opts, and returns
+// a client for them and their URLs by adapter name.
+func newServers(t *testing.T, opts []prblm.Option) (*http.Client, map[string]string) {
+	t.Helper()
+
+	// Idle connections are closed before the servers stop; fiber's
+	// shutdown would otherwise wait for them.
+	client := &http.Client{Transport: &http.Transport{}}
+
+	servers := map[string]string{
+		"net/http": netHTTPServer(t, opts),
+		"gin":      ginServer(t, opts),
+		"fiber":    fiberServer(t, opts),
+	}
+
+	t.Cleanup(client.CloseIdleConnections)
+
+	return client, servers
+}
+
 // observed is the part of a response the parity scenarios compare.
 type observed struct {
 	contentType string
@@ -246,19 +266,7 @@ func fetch(t *testing.T, client *http.Client, base, path, caseName, accept strin
 func TestParity(t *testing.T) {
 	t.Parallel()
 
-	opts := newOptions()
-
-	// Idle connections are closed before the servers stop; fiber's
-	// shutdown would otherwise wait for them.
-	client := &http.Client{Transport: &http.Transport{}}
-
-	servers := map[string]string{
-		"net/http": netHTTPServer(t, opts),
-		"gin":      ginServer(t, opts),
-		"fiber":    fiberServer(t, opts),
-	}
-
-	t.Cleanup(client.CloseIdleConnections)
+	client, servers := newServers(t, newOptions())
 
 	tests := []struct {
 		name        string
@@ -337,15 +345,8 @@ func TestParity(t *testing.T) {
 func TestParity_Received(t *testing.T) {
 	t.Parallel()
 
-	client := &http.Client{Transport: &http.Transport{}}
-
-	servers := map[string]string{
-		"net/http": netHTTPServer(t, nil),
-		"gin":      ginServer(t, nil),
-		"fiber":    fiberServer(t, nil),
-	}
-
-	t.Cleanup(client.CloseIdleConnections)
+	// Zero configuration: no enricher adds members to the exact body.
+	client, servers := newServers(t, nil)
 
 	want := observed{
 		status:      http.StatusBadGateway,
@@ -354,11 +355,11 @@ func TestParity_Received(t *testing.T) {
 		body:        `{"title":"Bad Gateway","status":502,"detail":"An upstream service returned an invalid response.","instance":"/vessels/7"}`,
 	}
 
-	for _, name := range []string{"net/http", "gin", "fiber"} {
+	for name, base := range servers {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := fetch(t, client, servers[name], pathGateway, caseReceived, ""); got != want {
+			if got := fetch(t, client, base, pathGateway, caseReceived, ""); got != want {
 				t.Errorf("%s sent\n got  %+v\n want %+v", name, got, want)
 			}
 		})
