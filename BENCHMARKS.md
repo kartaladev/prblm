@@ -15,10 +15,25 @@ an `OnError` hook that does nothing, the shape of a real configuration.
 |---|---|---|
 | `baseline` | `GET /v1/vessels/7` | 404 with a fixed JSON body, without prblm |
 | `mapped-json` | `GET /v1/vessels/7`, the handler returns a mapped error | 404 `application/problem+json` |
+| `fallback-500` | `GET /v1/vessels/7`, the handler returns an error no mapper recognizes | 500 `application/problem+json` |
+| `xml` | as `mapped-json`, with `Accept: application/problem+xml` | 404 `application/problem+xml` |
+| `resolved-type` | `GET /v1/contracts/7`, mapped to a registered type under the namespace `/v1/api/probs` | 409, with the resolved `type` |
+| `discovery-200` | `GET /v1/api/probs/contracts/blacklisted-supplier`, `Accept: application/json` | 200 `application/json` |
+| `discovery-304` | as `discovery-200`, with the page's `ETag` in `If-None-Match` | 304 |
 
 | Module | Benchmark | Source |
 |---|---|---|
 | `github.com/kartaladev/prblm` (net/http) | `BenchmarkWrap` | `bench_test.go` |
+
+The core also has micro-benchmarks of its hot paths:
+
+| Benchmark | Cases | Source |
+|---|---|---|
+| `BenchmarkResolve` | `mapped`, `fallback` | `bench_test.go` |
+| `BenchmarkRespond` | `json`, `xml` | `bench_test.go` |
+| `BenchmarkNegotiate` | `empty`, `browser`, `xml`, `malformed` (the `Accept` header) | `respond_internal_test.go` |
+| `BenchmarkIsSubtype` | | `namespace_internal_test.go` |
+| `BenchmarkResolveType` | `resolved`, `kept`, `invalid`, `undocumented` | `namespace_internal_test.go` |
 
 Before it is timed, each case serves one request and fails unless the status, `Content-Type` and
 a body marker are what the case expects, so a benchmark never measures a broken path.

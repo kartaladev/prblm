@@ -34,7 +34,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
   - GREEN: the benchmarks, internal ones in the core's internal test files
   - REFACTOR: name the shared fixtures, then /simplify
 - [ ] 2.3 **(idle machine)** Re-run the D4 protocol for the core, commit the raw file, and update the net/http table with every case and a micro-benchmark table; verify the variance is at most ±5%
-- [ ] 2.4 Verify slice 2 end to end: suites, lint, `GOWORK=off` and smoke run clean in the core
+- [x] 2.4 Verify slice 2 end to end: suites, lint, `GOWORK=off` and smoke run clean in the core
 
 ## 3. Slice: gin request-path benchmarks
 
