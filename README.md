@@ -417,10 +417,23 @@ gateway := h.Wrap(func(http.ResponseWriter, *http.Request) error {
 })
 ```
 
-To pass an upstream status through without its content, register a consumer mapper such as
-`prblm.As(func(r *prblm.Received) *prblm.Problem { ... })` (see the `Received` godoc). A problem
-decoded by hand with `json.Unmarshal` or `xml.Unmarshal` is a `*Problem`, which describes itself:
-use `Parse` for responses from other services.
+To pass an upstream 4xx status through without its content, register a consumer mapper for
+received problems that answers with the application's own detail:
+
+```go
+h := prblm.NewHandler(prblm.WithMappers(
+	prblm.As(func(r *prblm.Received) *prblm.Problem {
+		if s := r.Problem.Status; s >= 400 && s < 500 {
+			return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+		}
+
+		return nil // the default 502
+	}),
+))
+```
+
+A problem decoded by hand with `json.Unmarshal` or `xml.Unmarshal` is a `*Problem`, which
+describes itself: use `Parse` for responses from other services.
 
 ## Other frameworks
 

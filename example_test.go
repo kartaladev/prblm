@@ -172,14 +172,15 @@ func ExampleReceived() {
 
 	// A gateway returns what it received: the client gets a safe 502, and
 	// the OnError hook gets the error, upstream problem included, to log.
-	gateway := h.Wrap(func(http.ResponseWriter, *http.Request) error {
+	fetchVessel := func(http.ResponseWriter, *http.Request) error {
 		r, err := prblm.Parse(upstream()) //nolint:bodyclose // Parse closes the body.
 		if err != nil {
 			return fmt.Errorf("%w: %w", prblm.ErrBadGateway, err)
 		}
 
 		return fmt.Errorf("load vessel 7: %w", r)
-	})
+	}
+	gateway := h.Wrap(fetchVessel)
 
 	// Relaying the upstream problem as it is takes a deliberate &r.Problem.
 	relay := h.Wrap(func(http.ResponseWriter, *http.Request) error {
@@ -191,7 +192,21 @@ func ExampleReceived() {
 		return &r.Problem
 	})
 
-	for _, handler := range []http.Handler{gateway, relay} {
+	// To pass an upstream 4xx status through with the application's own
+	// detail, register a consumer mapper for received problems. Nothing the
+	// upstream wrote reaches the client.
+	mapped := prblm.NewHandler(prblm.WithMappers(
+		prblm.As(func(r *prblm.Received) *prblm.Problem {
+			if s := r.Problem.Status; s >= 400 && s < 500 {
+				return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
+			}
+
+			return nil // the default 502
+		}),
+	))
+	passThrough := mapped.Wrap(fetchVessel)
+
+	for _, handler := range []http.Handler{gateway, relay, passThrough} {
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/vessels/7", http.NoBody))
 
@@ -200,6 +215,7 @@ func ExampleReceived() {
 	// Output:
 	// 502 {"title":"Bad Gateway","status":502,"detail":"An upstream service returned an invalid response.","instance":"/vessels/7"}
 	// 404 {"title":"Not Found","status":404,"detail":"vessel 7 missing in db shard-3","instance":"/vessels/7","table":"vessels_shard3"}
+	// 404 {"title":"Not Found","status":404,"detail":"The vessel service rejected the request.","instance":"/vessels/7"}
 }
 
 func ExampleNew() {

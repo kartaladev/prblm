@@ -47,12 +47,13 @@ var ErrNotProblem = errors.New("prblm: response is not a problem")
 // included, return &r.Problem: it is a deliberate choice, made at the call
 // site, to pass on what the other service wrote.
 //
-// To answer with the upstream status but none of its content, register a
-// consumer mapper for received problems:
+// To answer with an upstream 4xx status but none of its content, register a
+// consumer mapper for received problems that gives the application's own
+// detail (see the example):
 //
 //	prblm.As(func(r *prblm.Received) *prblm.Problem {
 //		if s := r.Problem.Status; s >= 400 && s < 500 {
-//			return prblm.New(s) // the status, without the upstream detail
+//			return prblm.New(s, prblm.WithDetail("The vessel service rejected the request."))
 //		}
 //
 //		return nil // the default 502

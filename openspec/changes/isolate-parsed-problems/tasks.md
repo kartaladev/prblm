@@ -56,16 +56,16 @@
 
 ## 4. Review fixes
 
-- [ ] 4.1 `ExampleReceived` shows a consumer mapper as its third case (design Risks); verify `go test -run ExampleReceived ./` passes
+- [x] 4.1 `ExampleReceived` shows a consumer mapper as its third case (design Risks); verify `go test -run ExampleReceived ./` passes
   - RED: add the case with a `prblm.As(func(r *prblm.Received) *prblm.Problem {...})` mapper that passes an upstream 4xx status through with the application's own detail, and extend `// Output:` with the expected line; run it and confirm the output mismatch is the failure.
   - GREEN: make the example produce the expected output; update the README snippet that mirrors `ExampleReceived` to match.
   - REFACTOR: /simplify
-- [ ] 4.2 Characterize `errors.As` on a wrapped received problem; verify `go test -run TestReceived_As ./` passes
+- [x] 4.2 Characterize `errors.As` on a wrapped received problem; verify `go test -run TestReceived_As ./` passes
   - `errors.As(fmt.Errorf("call: %w", r), &target)` with `target *prblm.Received` succeeds and `target.Problem` holds the upstream fields.
   - `errors.As(..., &p)` with `p *prblm.Problem` does not match (pins the migration note).
   - Characterization tests: show they are meaningful by breaking the behavior temporarily (for example, adding an `As` method or embedding) and recording the failure, then restoring.
-- [ ] 4.3 CHANGELOG `[Unreleased]` migration: client code that does `errors.As(err, &p)` with `p *prblm.Problem` on a `Parse` result no longer matches; use `r *prblm.Received`, then `r.Problem`
-- [ ] 4.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
+- [x] 4.3 CHANGELOG `[Unreleased]` migration: client code that does `errors.As(err, &p)` with `p *prblm.Problem` on a `Parse` result no longer matches; use `r *prblm.Received`, then `r.Problem`
+- [x] 4.4 Verify: in every touched module `gofmt -l .`, `go vet ./...`, `golangci-lint run ./...`, `go test -race ./...`, `GOWORK=off go test ./...`, `GOWORK=off go mod tidy -diff`; and `openspec validate isolate-parsed-problems --strict`
 
 ## Workflow follow-up
 
