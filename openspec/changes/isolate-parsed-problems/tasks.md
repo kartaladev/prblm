@@ -35,7 +35,7 @@
 
 ## 3. Slice: parity in gin and fiber, and documentation
 
-- [ ] 3.1 Same response for a wrapped received problem in every adapter (error-mapping / Scenario: Same response in every adapter); verify `go test -race -run TestParity_Received ./...` passes in `internal/paritytest` in both CI modes
+- [x] 3.1 Same response for a wrapped received problem in every adapter (error-mapping / Scenario: Same response in every adapter); verify `go test -race -run TestParity_Received ./...` passes in `internal/paritytest` in both CI modes
   - RED: `TestParity_Received` in `internal/paritytest`, with one row per adapter (net/http, gin, fiber) asserting the exact body from the Examples table. That module replaces the core with the local one in both modes, so it can use `prblm.Received` before the adapters require v0.2.0. Before 2.1 lands, the same case written with v0.1.0's `*Problem` shows the 404 with `table` in each adapter. Record that output as the proof for #8.
   - GREEN: no adapter code change expected.
   - REFACTOR: reuse the existing parity helpers in `parity_test.go`; /simplify
