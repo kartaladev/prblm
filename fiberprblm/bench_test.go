@@ -177,17 +177,6 @@ func (s *benchServer) serveRequest(req *fasthttp.Request) {
 	s.handler(&s.ctx)
 }
 
-// observeFresh serves the request once on a freshly initialized context, as
-// the first request of a connection, and returns what the client gets.
-func (s *benchServer) observeFresh() observed {
-	var ctx fasthttp.RequestCtx
-
-	ctx.Init(&s.req, nil, nil)
-	s.handler(&ctx)
-
-	return observeResponse(&ctx.Response)
-}
-
 // observed is the part of a response the pre-loop checks compare.
 type observed struct {
 	// header holds the header lines as sent, sorted, without Date, which
@@ -204,6 +193,17 @@ func (s *benchServer) observe() observed {
 	s.serve()
 
 	return observeResponse(&s.ctx.Response)
+}
+
+// observeFresh serves the request once on a freshly initialized context, as
+// the first request of a connection, and returns what the client gets.
+func (s *benchServer) observeFresh() observed {
+	var ctx fasthttp.RequestCtx
+
+	ctx.Init(&s.req, nil, nil)
+	s.handler(&ctx)
+
+	return observeResponse(&ctx.Response)
 }
 
 // observeResponse returns what the client gets of resp.
