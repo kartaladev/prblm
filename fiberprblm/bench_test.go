@@ -86,8 +86,12 @@ type errorHandlerCase struct {
 	contentType string
 	marker      string
 	status      int
+	// absent is text the body must not contain.
+	absent string
 	// baseline selects the handler that answers without prblm.
 	baseline bool
+	// emptyBody requires a response without a body.
+	emptyBody bool
 	// revalidate sends the ETag of a first response in If-None-Match.
 	revalidate bool
 }
@@ -160,14 +164,28 @@ func newBenchServer(b *testing.B, tc errorHandlerCase) *benchServer {
 	return s
 }
 
-// serve serves the request once. The context, initialized once, is reused,
+// serve serves the request once.
+func (s *benchServer) serve() { s.serveRequest(&s.req) }
+
+// serveRequest serves req once. The context, initialized once, is reused,
 // as fasthttp's server reuses it for the requests of a connection, and starts
 // every request from an empty response and a copy of the request, so no
 // state leaks between requests.
-func (s *benchServer) serve() {
+func (s *benchServer) serveRequest(req *fasthttp.Request) {
 	s.ctx.Response.Reset()
-	s.req.CopyTo(&s.ctx.Request)
+	req.CopyTo(&s.ctx.Request)
 	s.handler(&s.ctx)
+}
+
+// observeFresh serves the request once on a freshly initialized context, as
+// the first request of a connection, and returns what the client gets.
+func (s *benchServer) observeFresh() observed {
+	var ctx fasthttp.RequestCtx
+
+	ctx.Init(&s.req, nil, nil)
+	s.handler(&ctx)
+
+	return observeResponse(&ctx.Response)
 }
 
 // observed is the part of a response the pre-loop checks compare.
@@ -180,18 +198,24 @@ type observed struct {
 	status      int
 }
 
-// observe serves the request once and returns what the client gets.
+// observe serves the request once on the reused context and returns what
+// the client gets.
 func (s *benchServer) observe() observed {
 	s.serve()
 
-	o := observed{status: s.ctx.Response.StatusCode(), body: string(s.ctx.Response.Body())}
+	return observeResponse(&s.ctx.Response)
+}
+
+// observeResponse returns what the client gets of resp.
+func observeResponse(resp *fasthttp.Response) observed {
+	o := observed{status: resp.StatusCode(), body: string(resp.Body())}
 
 	// The header as sent: fasthttp leaves out the Content-Type of a
 	// response without a body, such as a 304, which ContentType reports
 	// with its default.
 	var lines []string
 
-	for line := range strings.SplitSeq(s.ctx.Response.Header.String(), "\r\n") {
+	for line := range strings.SplitSeq(resp.Header.String(), "\r\n") {
 		name, value, ok := strings.Cut(line, ": ")
 		if !ok || name == fiber.HeaderDate {
 			continue
@@ -210,22 +234,46 @@ func (s *benchServer) observe() observed {
 	return o
 }
 
-// expectResponse serves the request twice and fails b unless both
-// responses are the same and what tc expects, so a benchmark never measures
-// a broken path (for example a mapper that no longer matches, so every
-// iteration is the 500 fallback), nor a context that leaks state from one
-// request into the next.
+// otherRequest returns a request unlike every case's: the type
+// documentation as an HTML page. Served on the reused context before a case's
+// request, it leaves a response (status, headers and body) that a leak
+// would carry into the case's response.
+func otherRequest() *fasthttp.Request {
+	req := new(fasthttp.Request)
+	req.Header.SetMethod(http.MethodGet)
+	req.SetRequestURI(benchPathTypeDoc)
+	req.Header.Set(fiber.HeaderAccept, "text/html")
+
+	return req
+}
+
+// expectResponse fails b unless the response of the reused context, after it
+// served a different request, is the same as the response of a freshly
+// initialized context, and is what tc expects. A benchmark then never
+// measures a broken path (for example a mapper that no longer matches, so
+// every iteration is the 500 fallback), nor a context that leaks state from
+// one request into the next.
 func expectResponse(b *testing.B, s *benchServer, tc errorHandlerCase) {
 	b.Helper()
 
-	first, second := s.observe(), s.observe()
-	if first != second {
-		b.Fatalf("the second response differs from the first:\n got  %+v\n want %+v", second, first)
+	s.serveRequest(otherRequest())
+
+	reused, fresh := s.observe(), s.observeFresh()
+	if reused != fresh {
+		b.Fatalf("the reused context's response differs from a fresh context's:\n got  %+v\n want %+v", reused, fresh)
 	}
 
-	if first.status != tc.status || first.contentType != tc.contentType || !strings.Contains(first.body, tc.marker) {
+	if reused.status != tc.status || reused.contentType != tc.contentType || !strings.Contains(reused.body, tc.marker) {
 		b.Fatalf("got %d %q %s, want %d %q containing %s",
-			first.status, first.contentType, first.body, tc.status, tc.contentType, tc.marker)
+			reused.status, reused.contentType, reused.body, tc.status, tc.contentType, tc.marker)
+	}
+
+	if tc.emptyBody && reused.body != "" {
+		b.Fatalf("got body %s, want none", reused.body)
+	}
+
+	if tc.absent != "" && strings.Contains(reused.body, tc.absent) {
+		b.Fatalf("got %s, want it without %q", reused.body, tc.absent)
 	}
 }
 
@@ -253,6 +301,7 @@ var errorHandlerCases = []errorHandlerCase{
 		err:         errUnmapped,
 		path:        benchPathVessel,
 		status:      http.StatusInternalServerError,
+		absent:      "hunter2",
 		contentType: "application/problem+json",
 		marker:      `"title":"Internal Server Error"`,
 	},
@@ -286,6 +335,7 @@ var errorHandlerCases = []errorHandlerCase{
 		path:       benchPathTypeDoc,
 		accept:     "application/json",
 		revalidate: true,
+		emptyBody:  true,
 		status:     http.StatusNotModified,
 	},
 }

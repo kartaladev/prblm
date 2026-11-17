@@ -109,8 +109,12 @@ type wrapCase struct {
 	contentType string
 	marker      string
 	status      int
+	// absent is text the body must not contain.
+	absent string
 	// baseline selects the handler that answers without prblm.
 	baseline bool
+	// emptyBody requires a response without a body.
+	emptyBody bool
 	// revalidate sends the ETag of a first response in If-None-Match.
 	revalidate bool
 }
@@ -186,6 +190,14 @@ func expectResponse(b *testing.B, server http.Handler, req *http.Request, tc wra
 		b.Fatalf("got %d %q %s, want %d %q containing %s",
 			rec.Code, contentType, rec.Body, tc.status, tc.contentType, tc.marker)
 	}
+
+	if tc.emptyBody && rec.Body.String() != "" {
+		b.Fatalf("got body %s, want none", rec.Body.String())
+	}
+
+	if tc.absent != "" && strings.Contains(rec.Body.String(), tc.absent) {
+		b.Fatalf("got %s, want it without %q", rec.Body.String(), tc.absent)
+	}
 }
 
 // wrapCases are the request-path cases of design D3 (add-benchmarks).
@@ -211,6 +223,7 @@ var wrapCases = []wrapCase{
 		err:         errUnmapped,
 		path:        benchPathVessel,
 		status:      http.StatusInternalServerError,
+		absent:      "hunter2",
 		contentType: problemJSONType,
 		marker:      `"title":"Internal Server Error"`,
 	},
@@ -244,6 +257,7 @@ var wrapCases = []wrapCase{
 		path:       benchPathTypeDoc,
 		accept:     "application/json",
 		revalidate: true,
+		emptyBody:  true,
 		status:     http.StatusNotModified,
 	},
 }

@@ -38,13 +38,17 @@ The core also has micro-benchmarks of its hot paths:
 | `BenchmarkResolveType` | `resolved`, `kept`, `invalid`, `undocumented` | `namespace_internal_test.go` |
 
 Before it is timed, each case serves one request and fails unless the status, `Content-Type` and
-a body marker are what the case expects, so a benchmark never measures a broken path.
+a body marker are what the case expects, so a benchmark never measures a broken path. The
+`discovery-304` response must also have an empty body, and the `fallback-500` body must not contain
+the error's text.
 
 The fiber benchmark calls the app's fasthttp handler (`app.Handler()`) directly, not `app.Test`,
 whose in-memory network round trip would be measured too. Like fasthttp's server on a kept-alive
 connection, it reuses one `fasthttp.RequestCtx`: before every request, the response is reset and a
-request built once is copied in. Its check serves each case twice and fails unless both responses
-are the same, so no state leaks from one request into the next.
+request built once is copied in. Its check serves a different request (the type documentation as
+an HTML page) on that context first, then the case's request, and fails unless the response is the
+same as the one a freshly initialized `RequestCtx` gets, so no state leaks from one request into the
+next.
 
 ## Checking that the benchmarks run
 
