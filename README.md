@@ -767,6 +767,12 @@ overhead. The cases, the commands and the measurement protocol are in
 `bench/results/`. Each table names the machine, OS, Go version, module versions and commit it
 was measured on, so compare overhead, not absolute times.
 
+Much of a request's time is not prblm's. CPU profiles of these benchmarks (BENCHMARKS.md,
+"Profile findings") spend most samples in the Go runtime and the framework: `ServeMux` route
+matching and header-key canonicalization for net/http, the handler chain for gin, and fasthttp's
+header-key normalization and URI parsing for fiber. Only functions in this repository are
+optimized here.
+
 ### net/http
 
 `BenchmarkWrap` (`bench_test.go`): a `ServeMux`, a handler returning an error through
