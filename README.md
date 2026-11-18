@@ -824,23 +824,24 @@ The core's hot paths on their own (`BenchmarkResolve`, `BenchmarkRespond`, `Benc
 `Middleware` installed with `engine.Use`, a route recording an error with `c.Error`, and the problem
 response. The `baseline` row is a route answering with `c.Data`, without prblm.
 
-Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. prblm v0.1.0,
-gin v1.12.0. Raw file: `bench/results/ginprblm-2026-11-18-940c33f.txt`.
+Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `c5bb6e9`, 2026-11-18. prblm v0.2.0,
+gin v1.12.0. Raw file: `bench/results/ginprblm-2026-11-18-c5bb6e9.txt`.
 
 | Case | time/op | B/op | allocs/op |
 |---|---|---|---|
-| `baseline` | 138.9 ns ± 1% | 80 B | 3 |
-| `mapped-json` | 1.373 µs ± 1% | 1.697 KiB | 29 |
-| `fallback-500` | 1.459 µs ± 1% | 1.635 KiB | 28 |
-| `xml` | 3.811 µs ± 0% | 9.018 KiB | 87 |
-| `resolved-type` | 1.486 µs ± 0% | 1.936 KiB | 30 |
-| `discovery-200` | 465.3 ns ± 1% | 96 B | 6 |
-| `discovery-304` | 421.9 ns ± 0% | 48 B | 3 |
+| `baseline` | 133.9 ns ± 1% | 80 B | 3 |
+| `mapped-json` | 1.266 µs ± 1% | 1.697 KiB | 26 |
+| `fallback-500` | 1.355 µs ± 1% | 1.635 KiB | 25 |
+| `xml` | 1.578 µs ± 1% | 2.225 KiB | 39 |
+| `resolved-type` | 1.391 µs ± 1% | 1.936 KiB | 27 |
+| `discovery-200` | 467.6 ns ± 0% | 96 B | 6 |
+| `discovery-304` | 422.7 ns ± 0% | 48 B | 3 |
 
-Measured with `GOWORK=off`, so against the released core in the module's `go.mod`, v0.1.0. The core
-optimizations in [BENCHMARKS.md](BENCHMARKS.md#what-was-done-with-each-candidate) reach this adapter
-with the next core release: measured against the repository's core, its `xml` case went from 3.829
-µs to 1.652 µs (about 57% faster). These rows are measured again after that release.
+Measured with `GOWORK=off`, so against the released core in the module's `go.mod`, v0.2.0, which
+carries the core optimizations in [BENCHMARKS.md](BENCHMARKS.md#what-was-done-with-each-candidate).
+Against the same adapter on core v0.1.0 (`bench/results/ginprblm-2026-11-18-940c33f.txt`), the `xml`
+case went from 3.811 µs to 1.578 µs (−58.61%, p=0.000); compare with `benchstat -ignore pkg`, since
+that file still names the adapter's old package path.
 
 ### fiber
 
@@ -849,23 +850,24 @@ with the next core release: measured against the repository's core, its `xml` ca
 handler without a network round trip. The `baseline` row is a route answering with `c.Send`, without
 prblm.
 
-Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. prblm v0.1.0,
-fiber v3.7.0, fasthttp v1.78.0. Raw file: `bench/results/fiberprblm-2026-11-18-940c33f.txt`.
+Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `c5bb6e9`, 2026-11-18. prblm v0.2.0,
+fiber v3.7.0, fasthttp v1.78.0. Raw file: `bench/results/fiberprblm-2026-11-18-c5bb6e9.txt`.
 
 | Case | time/op | B/op | allocs/op |
 |---|---|---|---|
-| `baseline` | 166.4 ns ± 2% | 0 B | 0 |
-| `mapped-json` | 1.803 µs ± 2% | 1.658 KiB | 28 |
-| `fallback-500` | 1.876 µs ± 1% | 1.596 KiB | 27 |
-| `xml` | 4.080 µs ± 1% | 9.015 KiB | 88 |
-| `resolved-type` | 1.893 µs ± 2% | 1.896 KiB | 29 |
+| `baseline` | 164.4 ns ± 1% | 0 B | 0 |
+| `mapped-json` | 1.709 µs ± 1% | 1.658 KiB | 25 |
+| `fallback-500` | 1.812 µs ± 1% | 1.596 KiB | 24 |
+| `xml` | 2.068 µs ± 1% | 2.232 KiB | 40 |
+| `resolved-type` | 1.830 µs ± 1% | 1.896 KiB | 26 |
 | `discovery-200` | 1.205 µs ± 1% | 224 B | 11 |
-| `discovery-304` | 871.1 ns ± 1% | 176 B | 8 |
+| `discovery-304` | 870.3 ns ± 0% | 176 B | 8 |
 
-Measured with `GOWORK=off`, so against the released core in the module's `go.mod`, v0.1.0. The core
-optimizations in [BENCHMARKS.md](BENCHMARKS.md#what-was-done-with-each-candidate) reach this adapter
-with the next core release: measured against the repository's core, its `xml` case went from 4.064
-µs to 2.094 µs (about 48% faster). These rows are measured again after that release.
+Measured with `GOWORK=off`, so against the released core in the module's `go.mod`, v0.2.0, which
+carries the core optimizations in [BENCHMARKS.md](BENCHMARKS.md#what-was-done-with-each-candidate).
+Against the same adapter on core v0.1.0 (`bench/results/fiberprblm-2026-11-18-940c33f.txt`), the
+`xml` case went from 4.080 µs to 2.068 µs (−49.33%, p=0.000); compare with `benchstat -ignore pkg`,
+since that file still names the adapter's old package path.
 
 ## Defaults
 
