@@ -779,39 +779,39 @@ optimized here.
 `Handler.Wrap`, wrapped in `Handler.Recover` as the gin and fiber benchmarks install their
 `Recovery`, and the problem response. The `baseline` row is a handler answering without prblm.
 
-Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. Raw file:
-`bench/results/core-2026-11-18-940c33f.txt`.
+Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `91d888b`, 2026-11-18. Raw file:
+`bench/results/core-2026-11-18-91d888b.txt`.
 
 | Case | time/op | B/op | allocs/op |
 |---|---|---|---|
-| `baseline` | 110.3 ns ± 2% | 32 B | 2 |
-| `mapped-json` | 1.171 µs ± 1% | 1.649 KiB | 25 |
-| `fallback-500` | 1.275 µs ± 1% | 1.587 KiB | 24 |
-| `xml` | 1.489 µs ± 1% | 2.237 KiB | 39 |
-| `resolved-type` | 1.290 µs ± 1% | 1.887 KiB | 26 |
-| `discovery-200` | 616.8 ns ± 1% | 176 B | 9 |
-| `discovery-304` | 568.1 ns ± 2% | 128 B | 6 |
+| `baseline` | 109.5 ns ± 1% | 32 B | 2 |
+| `mapped-json` | 1.169 µs ± 0% | 1.649 KiB | 25 |
+| `fallback-500` | 1.271 µs ± 1% | 1.587 KiB | 24 |
+| `xml` | 1.473 µs ± 3% | 2.175 KiB | 38 |
+| `resolved-type` | 1.288 µs ± 2% | 1.887 KiB | 26 |
+| `discovery-200` | 613.5 ns ± 1% | 176 B | 9 |
+| `discovery-304` | 565.4 ns ± 0% | 128 B | 6 |
 
 The core's hot paths on their own (`BenchmarkResolve`, `BenchmarkRespond`, `BenchmarkNegotiate`,
 `BenchmarkResolveType`, `BenchmarkIsSubtype`), from the same run:
 
 | Benchmark | time/op | B/op | allocs/op |
 |---|---|---|---|
-| `Resolve/mapped` | 168.2 ns ± 1% | 576 B | 5 |
-| `Resolve/fallback` | 254.9 ns ± 1% | 464 B | 4 |
-| `Respond/json` | 891.0 ns ± 1% | 1.548 KiB | 19 |
-| `Respond/xml` | 1.192 µs ± 1% | 2.136 KiB | 33 |
-| `Negotiate/empty` | 77.75 ns ± 1% | 0 B | 0 |
-| `Negotiate/any` | 78.20 ns ± 0% | 0 B | 0 |
-| `Negotiate/json` | 104.6 ns ± 1% | 0 B | 0 |
-| `Negotiate/browser` | 298.2 ns ± 1% | 0 B | 0 |
-| `Negotiate/xml` | 119.2 ns ± 1% | 0 B | 0 |
-| `Negotiate/malformed` | 58.64 ns ± 1% | 0 B | 0 |
-| `ResolveType/resolved` | 9.711 ns ± 2% | 0 B | 0 |
-| `ResolveType/kept` | 4.176 ns ± 2% | 0 B | 0 |
+| `Resolve/mapped` | 169.0 ns ± 1% | 576 B | 5 |
+| `Resolve/fallback` | 263.5 ns ± 1% | 464 B | 4 |
+| `Respond/json` | 901.8 ns ± 2% | 1.548 KiB | 19 |
+| `Respond/xml` | 1.176 µs ± 0% | 2.073 KiB | 32 |
+| `Negotiate/empty` | 78.37 ns ± 2% | 0 B | 0 |
+| `Negotiate/any` | 77.98 ns ± 1% | 0 B | 0 |
+| `Negotiate/json` | 105.0 ns ± 2% | 0 B | 0 |
+| `Negotiate/browser` | 298.3 ns ± 1% | 0 B | 0 |
+| `Negotiate/xml` | 119.3 ns ± 1% | 0 B | 0 |
+| `Negotiate/malformed` | 58.58 ns ± 0% | 0 B | 0 |
+| `ResolveType/resolved` | 9.682 ns ± 1% | 0 B | 0 |
+| `ResolveType/kept` | 4.171 ns ± 2% | 0 B | 0 |
 | `ResolveType/invalid` | 142.7 ns ± 1% | 112 B | 3 |
-| `ResolveType/undocumented` | 164.2 ns ± 1% | 128 B | 3 |
-| `IsSubtype` | 17.31 ns ± 1% | 0 B | 0 |
+| `ResolveType/undocumented` | 167.6 ns ± 2% | 128 B | 3 |
+| `IsSubtype` | 17.39 ns ± 1% | 0 B | 0 |
 
 ### gin
 

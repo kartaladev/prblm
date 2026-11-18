@@ -1,0 +1,120 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 6788572	       165.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  675567	      1705 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  665947	      1806 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  570674	      2062 ns/op	    2285 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  652048	      1837 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1193 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1397502	       857.7 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 7138791	       165.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  680336	      1715 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  670398	      1799 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  550884	      2072 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  663243	      1829 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1198 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1392183	       862.4 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 7262138	       164.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  653116	      1722 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  665076	      1805 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  586279	      2076 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  653798	      1839 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1206 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1395511	       859.2 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 6965514	       171.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  614757	      1744 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  660024	      1992 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  542539	      2154 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  651804	      1892 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	  987014	      1225 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1373846	       871.9 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 6802765	       173.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  537183	      1989 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  626583	      1907 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  536008	      2134 ns/op	    2285 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  662055	      2040 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1215 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1389226	       863.6 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 7272621	       177.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  636010	      2060 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  618637	      2222 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  485954	      2657 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  591278	      1936 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	  991304	      1232 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1371916	       876.9 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 7212954	       165.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  663656	      1756 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  669562	      1840 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  574363	      2402 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  647970	      1990 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	  952660	      1227 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1289202	       918.8 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 7339742	       164.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  679915	      1750 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  660674	      1840 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  575880	      2104 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  618272	      1890 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	  981036	      1224 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1357106	       882.0 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 6941703	       170.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  609400	      1783 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  657853	      1872 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  576742	      2128 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  662938	      1849 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	  958020	      1202 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1391575	       863.5 ns/op	     176 B/op	       8 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 7125868	       166.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  684525	      1710 ns/op	    1698 B/op	      25 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  670478	      1809 ns/op	    1634 B/op	      24 allocs/op
+BenchmarkErrorHandler/xml-14              	  579504	      2042 ns/op	    2286 B/op	      40 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  666596	      1815 ns/op	    1942 B/op	      26 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1196 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1372933	       872.6 ns/op	     176 B/op	       8 allocs/op
+PASS

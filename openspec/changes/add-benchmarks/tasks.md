@@ -71,7 +71,7 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 ## 6. Slice: final results published and smoke-tested in CI
 
 - [x] 6.1 **(idle machine)** Run the D4 protocol once more for all three modules on the final code, commit the raw files, and replace the README tables with the final `benchstat` output (baseline next to prblm per adapter); verify every table names machine, OS, Go version, module versions and SHA
-  - Done 2026-11-18 at `940c33f`, the final code: one D4 run per module also serves 1.3, 2.3, 3.3 and 4.3, since measuring the earlier slices' code would publish numbers the final code replaces. fiberprblm was measured twice: its `baseline` row was ±47% in the first run, ±2% in the second
+  - Done 2026-11-18 at `940c33f`, the final code: one D4 run per module also serves 1.3, 2.3, 3.3 and 4.3, since measuring the earlier slices' code would publish numbers the final code replaces. fiberprblm was measured twice: its `baseline` row was ±47% in the first run, ±2% in the second. The core was measured again at `91d888b`, after the code review's change to `marshalXML`; the adapters run the released core, so their tables stand
 - [x] 6.2 Add the benchmark smoke step to `.github/workflows/ci.yml` for the core, `ginprblm` and `fiberprblm` (`go test -run '^$' -bench . -benchtime 1x ./...`, design D7); verify it passes locally with the same command, and that CI time grows by seconds, not minutes (the `GOWORK=off` run for the adapters is added in 7.6)
 - [x] 6.3 Verify the change end to end: every module's suites with `-race`, `GOWORK=off` for the published modules, lint clean, `go_vulncheck` shows no new findings, and no `go.mod` gains a new module
 
