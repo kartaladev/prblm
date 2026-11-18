@@ -657,6 +657,25 @@ func TestResponse_MergeInto_ValuesIndependent(t *testing.T) {
 	}
 }
 
+// A header the response holds without values is merged as it is: present,
+// with nil values, and an empty list stays empty.
+func TestResponse_MergeInto_NoValues(t *testing.T) {
+	t.Parallel()
+
+	res := prblm.Response{Header: http.Header{"X-Nil": nil, "X-Empty": {}}}
+	dst := http.Header{"X-Nil": {"old"}, "X-Empty": {"old"}}
+
+	res.MergeInto(dst)
+
+	if values, ok := dst["X-Nil"]; !ok || values != nil {
+		t.Errorf("X-Nil = %q (present %v), want present with nil values", values, ok)
+	}
+
+	if values, ok := dst["X-Empty"]; !ok || values == nil || len(values) != 0 {
+		t.Errorf("X-Empty = %#v (present %v), want present and empty", values, ok)
+	}
+}
+
 // The headers of a response stand alone the same way.
 func TestRespond_HeaderValuesIndependent(t *testing.T) {
 	t.Parallel()
