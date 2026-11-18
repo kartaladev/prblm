@@ -63,36 +63,16 @@ func (r Response) MergeInto(dst http.Header) {
 		return
 	}
 
-	// The copies share one array instead of one per header. Each is capped
-	// at its length, so an append to one copies it rather than overwriting
-	// the next.
-	n := 0
-	for _, values := range r.Header {
-		n += len(values)
-	}
-
-	copied := make([]string, 0, n)
-	clone := func(values []string) []string {
-		if values == nil {
-			return nil
-		}
-
-		start := len(copied)
-		copied = append(copied, values...)
-
-		return copied[start:len(copied):len(copied)]
-	}
-
 	for name, values := range r.Header {
 		switch name {
 		case "Vary":
 			addVary(dst, values...)
 		case "Cache-Control":
 			if len(dst.Values(name)) == 0 {
-				dst[name] = clone(values)
+				dst[name] = slices.Clone(values)
 			}
 		default:
-			dst[name] = clone(values)
+			dst[name] = slices.Clone(values)
 		}
 	}
 }
