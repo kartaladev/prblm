@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/kartaladev/prblm/fiberprblm"
+	"github.com/kartaladev/prblm/adapters/fiberprblm"
 )
 
 // Design D6 rests on fiber v3 letting the error handler tell a router 404

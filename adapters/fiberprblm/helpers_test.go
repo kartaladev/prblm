@@ -18,7 +18,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/fiberprblm"
+	"github.com/kartaladev/prblm/adapters/fiberprblm"
 )
 
 var (

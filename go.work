@@ -2,8 +2,8 @@ go 1.27
 
 use (
 	.
-	./fiberprblm
-	./ginprblm
+	./adapters/fiberprblm
+	./adapters/ginprblm
 	./internal/paritytest
 	./internal/plugintest
 	./mappers/gormmap

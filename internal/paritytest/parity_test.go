@@ -16,8 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gofiber/fiber/v3"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/fiberprblm"
-	"github.com/kartaladev/prblm/ginprblm"
+	"github.com/kartaladev/prblm/adapters/fiberprblm"
+	"github.com/kartaladev/prblm/adapters/ginprblm"
 )
 
 var (

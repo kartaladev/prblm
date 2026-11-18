@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/ginprblm"
+	"github.com/kartaladev/prblm/adapters/ginprblm"
 )
 
 // The request-path benchmarks (design D2, D3 of add-benchmarks). Every

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kartaladev/prblm/ginprblm"
+	"github.com/kartaladev/prblm/adapters/ginprblm"
 )
 
 // gin-adapter / Scenario: Streaming and hijacking, SSE row: a flushed event

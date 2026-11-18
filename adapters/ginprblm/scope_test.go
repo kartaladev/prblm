@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/ginprblm"
+	"github.com/kartaladev/prblm/adapters/ginprblm"
 )
 
 // newScopedEngine returns an engine with a /v1/contracts group using scope

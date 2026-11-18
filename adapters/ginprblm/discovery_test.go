@@ -12,7 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/ginprblm"
+	"github.com/kartaladev/prblm/adapters/ginprblm"
 )
 
 // discoveryOptions are the options of the gin discovery scenarios:

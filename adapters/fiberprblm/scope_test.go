@@ -6,7 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/fiberprblm"
+	"github.com/kartaladev/prblm/adapters/fiberprblm"
 )
 
 // newScopedApp returns an app with a /v1/contracts group using scope and a

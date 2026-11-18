@@ -15,7 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/ginprblm"
+	"github.com/kartaladev/prblm/adapters/ginprblm"
 )
 
 // gin-adapter / Scenario: Options configure the middleware.

@@ -10,6 +10,8 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
 ### Added
 
 - `AddErrorHook`, which adds error hooks that `OnError` never replaces, so a library that wraps prblm
@@ -43,6 +45,9 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
   and about 2.2 KiB instead of 86 and 9 KiB, and is about 57% faster on the net/http request path;
   every problem response makes 3 fewer allocations and is 3% to 8% faster. The benchmarks, the
   measurement protocol and the comparisons are in [BENCHMARKS.md](BENCHMARKS.md).
+- The gin and fiber adapters moved to `github.com/kartaladev/prblm/adapters/ginprblm` and
+  `github.com/kartaladev/prblm/adapters/fiberprblm`, released as v0.2.0 alongside this version.
+  Their package names and APIs are unchanged; see their CHANGELOG.md files.
 
 ### Fixed
 
@@ -119,5 +124,6 @@ The first release.
   problem, each with a fixed, generic detail. `sql.ErrTxDone` and other errors are left to later
   mappers. `WithNotFound` and `WithUnavailable` replace either problem.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kartaladev/prblm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kartaladev/prblm/releases/tag/v0.1.0
