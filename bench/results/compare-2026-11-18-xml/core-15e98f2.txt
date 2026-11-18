@@ -1,0 +1,140 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	 9930774	       112.3 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  937512	      1221 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  924142	      1313 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  364690	      3338 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  898279	      1333 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1981465	       606.1 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2131216	       562.0 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1263962	       947.5 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  402554	      3011 ns/op	    9060 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10824958	       110.3 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  946850	      1251 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  889674	      1327 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  358184	      3380 ns/op	    9164 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  868916	      1357 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1923286	       628.7 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2068143	       572.0 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1242159	       964.5 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  394080	      3068 ns/op	    9059 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10466488	       113.5 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  931456	      1285 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  855298	      1392 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  340531	      3536 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  823675	      1382 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1907652	       626.5 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2038191	       592.3 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1207878	       997.0 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  375085	      3133 ns/op	    9060 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10401159	       116.1 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  849572	      1285 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  906096	      1346 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  320710	      3581 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  876463	      1372 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1912050	       625.3 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2081478	       578.8 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1239860	       965.5 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  399153	      3107 ns/op	    9061 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10700992	       111.3 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  939846	      1286 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  849123	      1348 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  349639	      3521 ns/op	    9164 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  885872	      1376 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1903174	       627.1 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2089443	       579.1 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1229725	       973.1 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  386744	      3178 ns/op	    9060 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10420292	       114.7 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  919257	      1261 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  888183	      1343 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  354855	      3554 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  642972	      1742 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1927012	       621.8 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2115304	       571.3 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1229199	       986.2 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  364882	      3144 ns/op	    9060 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10289737	       114.7 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  919569	      1303 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  870421	      1353 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  351578	      3402 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  885423	      1366 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1903602	       629.5 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2075796	       573.7 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1223035	       980.3 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  388450	      3083 ns/op	    9060 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10312039	       112.4 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  953550	      1249 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  890834	      1329 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  356893	      3367 ns/op	    9164 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  894356	      1346 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1938843	       619.8 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2102583	       573.2 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1257102	       954.0 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  399033	      3077 ns/op	    9061 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10335909	       115.0 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  888847	      1260 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  901890	      1360 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  324042	      3490 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  848358	      1358 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1969935	       608.5 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2127156	       566.6 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1240453	       970.5 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  393970	      3051 ns/op	    9060 B/op	      80 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkWrap/baseline-14         	10525899	       112.4 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14      	  898984	      1258 ns/op	    1689 B/op	      28 allocs/op
+BenchmarkWrap/fallback-500-14     	  893853	      1342 ns/op	    1625 B/op	      27 allocs/op
+BenchmarkWrap/xml-14              	  350965	      3391 ns/op	    9165 B/op	      86 allocs/op
+BenchmarkWrap/resolved-type-14    	  880192	      1355 ns/op	    1932 B/op	      29 allocs/op
+BenchmarkWrap/discovery-200-14    	 1916642	       624.7 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14    	 2088051	       575.3 ns/op	     128 B/op	       6 allocs/op
+BenchmarkRespond/json-14          	 1244949	       963.9 ns/op	    1585 B/op	      22 allocs/op
+BenchmarkRespond/xml-14           	  388712	      3083 ns/op	    9059 B/op	      80 allocs/op
+PASS

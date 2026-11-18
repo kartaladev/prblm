@@ -195,53 +195,84 @@ line. To profile one case, narrow the filter, for example `-bench 'BenchmarkWrap
 ### CPU profiles
 
 CPU profiles need an idle machine (see "Measurement protocol"). They use the same commands with
-`-cpuprofile "$PROF/<module>.cpu"` in place of the memory flags, and are read with
-`go tool pprof -top`.
+`-cpuprofile "$PROF/<module>.cpu"` in place of the memory flags, and are read the same way, without
+`-sample_index`. A plain `-top` puts most samples in the runtime (`kevent`, `madvise`, scheduler
+waits) and in the frameworks; `-show` counts that time against the function of this repository
+that caused it.
 
 ### Profile findings
 
 A function is a candidate for optimization when it has at least 5% flat CPU or at least 10% of
 `alloc_space` in a request-path profile. The table lists every candidate, all of them in this
-repository. Allocation shares are counted as described under "Memory profiles", for net/http, gin
-and fiber in that order. The benchmarks' own frames (the request and the discarding writer they
-build) are left out: they are not prblm code.
+repository. Shares are counted against the deepest function of this repository on the stack, as
+described under "Memory profiles", for net/http, gin and fiber in that order. The benchmarks' own
+frames (the request and the discarding writer they build) are left out: they are not prblm code.
 
-Memory profiles: 2026-11-18, commit `68ef42b`, Go 1.27, darwin/arm64, Apple M4 Pro. CPU profiles
-are pending an idle machine.
+Memory profiles: commit `68ef42b`. CPU profiles: commit `8359978`, after the two XML optimizations
+below, on an idle machine. Both 2026-11-18, Go 1.27.4, darwin/arm64, Apple M4 Pro.
 
-| Function | Module | Flat CPU % | `alloc_space` % | What allocates |
+| Function | Module | Flat CPU % | `alloc_space` % | What costs |
 |---|---|---|---|---|
-| `Problem.MarshalJSON` | core | pending | 16.0 · 15.3 · 17.3 | Two `json.Marshal` calls (standard members, then extensions) and the join of their outputs: 9 of the 28 allocations of `mapped-json`. |
-| `marshalXML` | core | pending | 13.8 · 13.6 · 14.0 | `xml.NewEncoder` makes a 4 KB `bufio.Writer` for every document: 52% of the bytes of the `xml` case. |
-| `newResponse` | core | pending | 13.4 · 12.8 · 14.4 | Every `Header.Set` and `Add` makes a one-element slice: 6 allocations per problem response. |
-| `(*Problem).setExt` | core | pending | 11.2 · 10.7 · 12.0 | The extension map, made when the `trace_id` enricher adds the request's first extension. |
-| `xmlenc.decodeTree` | core | pending | 7.5 · 7.4 · 7.6; `xml` case: 28.1 | Every member goes through `json.Marshal` and back, plain strings included: 32 of the 86 allocations of the `xml` case. Listed from the `xml` case's own profile. |
-
-Below the threshold, `Response.MergeInto` makes about 8% of the bytes but 18% to 26% of the
-allocations: it copies every header value of the problem response into the response writer's
-header.
+| `Problem.MarshalJSON` | core | 2.9 · 2.7 · 2.6 | 16.0 · 15.3 · 17.3 | Two `json.Marshal` calls (standard members, then extensions) and the join of their outputs: 9 of the 28 allocations of `mapped-json`. |
+| `marshalXML` | core | 0.2 · 0.4 · 0.3 | 13.8 · 13.6 · 14.0 | `xml.NewEncoder` makes a 4 KB `bufio.Writer` for every document: 52% of the bytes of the `xml` case. |
+| `newResponse` | core | 0.8 · 1.1 · 1.2 | 13.4 · 12.8 · 14.4 | Every `Header.Set` and `Add` makes a one-element slice: 6 allocations per problem response. |
+| `(*Problem).setExt` | core | < 1 | 11.2 · 10.7 · 12.0 | The extension map, made when the `trace_id` enricher adds the request's first extension. |
+| `xmlenc.decodeTree` | core | < 1 | 7.5 · 7.4 · 7.6; `xml` case: 28.1 | Every member goes through `json.Marshal` and back, plain strings included: 32 of the 86 allocations of the `xml` case. Listed from the `xml` case's own profile. |
+| `Response.MergeInto` | core | 3.5 · 5.9 · 3.3 | 6.3 · 8.8 · 5.9 | Copies every header value of the problem response, one slice per header, into the response writer's header: 18% to 26% of the allocations. |
+| `send` | `fiberprblm` | 11.3 (fiber) | 3.4 (fiber) | Moves the problem's headers through an `http.Header` to merge them by the core's rules, then deletes and re-adds each one in fasthttp, whose header-key normalization is most of the time. |
 
 ### What was done with each candidate
 
-Each optimization is compared with `benchstat`, old against new, `-count 10`. Allocation counts do
-not depend on machine load, so they are compared at any time with a fixed iteration count:
+Each optimization is compared with `benchstat`, old against new, `-count 10`, on the same machine.
+Allocation counts do not depend on machine load, so they are compared at any time with a fixed
+iteration count:
 
 ```sh
 go test -run '^$' -bench 'Benchmark(Wrap|Respond)$' -benchmem -benchtime 2000x -count 10 . > new.txt
 benchstat old.txt new.txt
 ```
 
-An optimization is kept only if time/op also shows no significant regression on an idle machine;
-until that run, the kept ones below are provisional.
+Time is compared on an idle machine, with test binaries built from each commit (`go test -c`, in
+workspace mode for the adapters, so they run the core under test) and run in turn, ten rounds of
+every version, so that drift affects them all alike. Each round runs, per version:
 
-| Candidate | Decision | Commit | `xml` case, B/op · allocs/op |
+```sh
+./core.test -test.run '^$' -test.bench 'Benchmark(Wrap|Respond)$' -test.benchmem -test.benchtime 1s
+./gin.test -test.run '^$' -test.bench 'BenchmarkMiddleware$' -test.benchmem -test.benchtime 1s
+./fiber.test -test.run '^$' -test.bench 'BenchmarkErrorHandler$' -test.benchmem -test.benchtime 1s
+```
+
+An optimization is kept for a significant improvement (p < 0.05) on a request-path case and no
+significant regression in any other case, step by step.
+
+| Candidate | Decision | Commit |
+|---|---|---|
+| `xmlenc.decodeTree` | Kept. A string value skips the JSON round trip: the XML is the same, because the XML encoder replaces invalid UTF-8 as `encoding/json` does (tested under both Go 1.27 JSON implementations, the default and `GOEXPERIMENT=nojsonv2`). | `60d4b7c` |
+| `marshalXML` | Kept. The 4 KB `bufio.Writer` comes from a `sync.Pool`, as in net/http: `xml.NewEncoder` reuses a `*bufio.Writer` of at least 4 KB. The writer is fixed-size and never reaches consumer code; `TestRespond_XMLIsolated` covers failed, panicking and large documents concurrently. | `8359978` |
+| `Problem.MarshalJSON` | Not changed. Go 1.27's `encoding/json/v2` (`MarshalerTo`, `MarshalWrite`) would write the members in one pass instead of two `Marshal` calls and a join, but importing it breaks every build with `GOEXPERIMENT=nojsonv2`, which Go 1.27 still supports. Revisit when that opt-out is removed. | |
+| `newResponse` | Open. | |
+| `Response.MergeInto` | Open. | |
+| `send` (`fiberprblm`) | Open. | |
+| `(*Problem).setExt` | Examined, not changed. The map holds the extension the enricher adds; making it is the cost of having an extension. | |
+
+#### XML optimizations
+
+The raw files are in `bench/results/compare-2026-11-18-xml/`, one per module and commit:
+`15e98f2` (before), `60d4b7c` (strings skip the JSON round trip) and `8359978` (pooled writer). No
+other case changed significantly in either step. Fiber's `resolved-type` row is 1.3% slower from
+`15e98f2` to `8359978` (p = 0.014), but neither step is significant on its own, and that case runs
+no XML code.
+
+```sh
+benchstat bench/results/compare-2026-11-18-xml/core-{15e98f2,60d4b7c,8359978}.txt
+```
+
+| `xml` case | `15e98f2` | `60d4b7c` | `8359978` |
 |---|---|---|---|
-| `xmlenc.decodeTree` | A string value skips the JSON round trip: the XML is the same, because the XML encoder replaces invalid UTF-8 as `encoding/json` does (tested under both Go 1.27 JSON implementations, the default and `GOEXPERIMENT=nojsonv2`). | `60d4b7c` | 8.9 KB → 6.3 KB · 86 → 44 |
-| `marshalXML` | The 4 KB `bufio.Writer` comes from a `sync.Pool`, as in net/http: `xml.NewEncoder` reuses a `*bufio.Writer` of at least 4 KB. The writer is fixed-size and never reaches consumer code; `TestRespond_XMLIsolated` covers failed, panicking and large documents concurrently. | `8359978` | 6.3 KB → 2.2 KB · 44 → 42 |
-| `Problem.MarshalJSON` | Not changed yet. Go 1.27's `encoding/json/v2` (`MarshalerTo`, `MarshalWrite`) would write the members in one pass instead of two `Marshal` calls and a join, but importing it breaks every build with `GOEXPERIMENT=nojsonv2`, which Go 1.27 still supports. Revisit when that opt-out is removed. | | |
-| `newResponse` | Open. One backing array for the header values it sets (the trick net/http uses), each value capped so an `append` cannot overwrite its neighbor, would turn 6 allocations into about 2. | | |
-| `(*Problem).setExt` | Examined, not changed. The map holds the extension the enricher adds; making it is the cost of having an extension. | | |
+| net/http, time/op | 3.446µ ± 3% | 1.884µ ± 2% (−45.33%, p=0.000) | 1.561µ ± 3% (−17.17% against `60d4b7c`, p=0.000) |
+| gin, time/op | 3.829µ ± 3% | 2.195µ ± 3% (−42.67%, p=0.000) | 1.718µ ± 2% (−21.75%, p=0.000) |
+| fiber, time/op | 4.064µ ± 5% | 2.527µ ± 6% (−37.82%, p=0.000) | 2.174µ ± 1% (−13.97%, p=0.000) |
+| net/http, B/op | 8.945Ki | 6.297Ki | 2.237Ki |
+| net/http, allocs/op | 86 | 44 | 42 |
 
-The `xml` case went from 9.0 KB and 86 allocations to 2.2 KB and 42 per request; the other cases are
-unchanged. The adapters use the same code, so their `xml` rows change by the same amounts when run
-in workspace mode.
+`Respond/xml` moved alike: 3.083µ, 1.590µ, 1.276µ.
