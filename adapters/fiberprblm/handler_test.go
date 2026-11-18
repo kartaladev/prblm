@@ -13,7 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/fiberprblm"
+	"github.com/kartaladev/prblm/adapters/fiberprblm"
 )
 
 // fiber-adapter / Scenario: Options configure the error handler.

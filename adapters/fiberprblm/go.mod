@@ -1,4 +1,4 @@
-module github.com/kartaladev/prblm/fiberprblm
+module github.com/kartaladev/prblm/adapters/fiberprblm
 
 go 1.27
 

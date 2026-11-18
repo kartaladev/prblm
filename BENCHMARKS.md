@@ -24,8 +24,8 @@ an `OnError` hook that does nothing, the shape of a real configuration.
 | Module | Benchmark | Source |
 |---|---|---|
 | `github.com/kartaladev/prblm` (net/http) | `BenchmarkWrap` | `bench_test.go` |
-| `github.com/kartaladev/prblm/ginprblm` | `BenchmarkMiddleware` | `ginprblm/bench_test.go` |
-| `github.com/kartaladev/prblm/fiberprblm` | `BenchmarkErrorHandler` | `fiberprblm/bench_test.go` |
+| `github.com/kartaladev/prblm/adapters/ginprblm` | `BenchmarkMiddleware` | `adapters/ginprblm/bench_test.go` |
+| `github.com/kartaladev/prblm/adapters/fiberprblm` | `BenchmarkErrorHandler` | `adapters/fiberprblm/bench_test.go` |
 
 The core also has micro-benchmarks of its hot paths:
 
@@ -56,16 +56,16 @@ Every benchmark runs once, without timing, in each module:
 
 ```sh
 go test -run '^$' -bench . -benchtime 1x ./...
-(cd ginprblm && go test -run '^$' -bench . -benchtime 1x ./...)
-(cd fiberprblm && go test -run '^$' -bench . -benchtime 1x ./...)
+(cd adapters/ginprblm && go test -run '^$' -bench . -benchtime 1x ./...)
+(cd adapters/fiberprblm && go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
 The adapters also run with `GOWORK=off`, against the released core in their `go.mod`, the
 configuration the published numbers are measured in:
 
 ```sh
-(cd ginprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
-(cd fiberprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
+(cd adapters/ginprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
+(cd adapters/fiberprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
 This is the smoke run. It needs no idle machine, and its timings mean nothing.
@@ -92,19 +92,20 @@ Numbers are measured only on an idle machine; a loaded machine gives noisy, unre
   (step 2 runs with `GOWORK=off`). From the repository root:
 
   ```sh
-  (cd ginprblm && GOWORK=off go list -m github.com/kartaladev/prblm github.com/gin-gonic/gin)
-  (cd fiberprblm && GOWORK=off go list -m github.com/kartaladev/prblm github.com/gofiber/fiber/v3 github.com/valyala/fasthttp)
+  (cd adapters/ginprblm && GOWORK=off go list -m github.com/kartaladev/prblm github.com/gin-gonic/gin)
+  (cd adapters/fiberprblm && GOWORK=off go list -m github.com/kartaladev/prblm github.com/gofiber/fiber/v3 github.com/valyala/fasthttp)
   ```
 
 ### 2. Run and save the raw output
 
-Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions
-in its own `go.mod`. An adapter module is then measured with the released core its `go.mod`
-requires, not the core in the repository, so the published adapter tables are measured again after
-every core release. To compare a change to the core in the adapters before it is released, run the
-adapters in workspace mode (without `GOWORK=off`), old against new. The raw output goes to
+Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions in
+its own `go.mod`. An adapter module is then measured with the released core its `go.mod` requires,
+not the core in the repository, so the published adapter tables are measured again after every core
+release. To compare a change to the core in the adapters before it is released, run the adapters in
+workspace mode (without `GOWORK=off`), old against new. The raw output goes to
 `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`, where `<module>` is `core` for the root
-module and the directory name for the others. From the repository root:
+module and the module's directory name for the others (`ginprblm`, `fiberprblm`). From the
+repository root:
 
 ```sh
 mkdir -p bench/results
@@ -115,14 +116,14 @@ GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./... \
 gin:
 
 ```sh
-(cd ginprblm && GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./...) \
+(cd adapters/ginprblm && GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./...) \
   | tee "bench/results/ginprblm-$(date +%F)-$(git rev-parse --short HEAD).txt"
 ```
 
 fiber:
 
 ```sh
-(cd fiberprblm && GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./...) \
+(cd adapters/fiberprblm && GOWORK=off go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s ./...) \
   | tee "bench/results/fiberprblm-$(date +%F)-$(git rev-parse --short HEAD).txt"
 ```
 
@@ -173,9 +174,9 @@ scratch directory `$PROF`:
 ```sh
 go test -run '^$' -bench BenchmarkWrap -benchtime 5s -memprofilerate 1 \
   -memprofile "$PROF/core.mem" -o "$PROF/core.test" .
-(cd ginprblm && go test -run '^$' -bench BenchmarkMiddleware -benchtime 5s -memprofilerate 1 \
+(cd adapters/ginprblm && go test -run '^$' -bench BenchmarkMiddleware -benchtime 5s -memprofilerate 1 \
   -memprofile "$PROF/gin.mem" -o "$PROF/gin.test" .)
-(cd fiberprblm && go test -run '^$' -bench BenchmarkErrorHandler -benchtime 5s -memprofilerate 1 \
+(cd adapters/fiberprblm && go test -run '^$' -bench BenchmarkErrorHandler -benchtime 5s -memprofilerate 1 \
   -memprofile "$PROF/fiber.mem" -o "$PROF/fiber.test" .)
 ```
 
@@ -253,7 +254,7 @@ significant regression in any other case, step by step.
 | `Problem.MarshalJSON` | Examined, not changed. Go 1.27's `encoding/json/v2` (`MarshalerTo`, `MarshalWrite`) would write the members in one pass instead of two `Marshal` calls and a join, but importing it breaks every build with `GOEXPERIMENT=nojsonv2`, which Go 1.27 still supports: `GOEXPERIMENT=nojsonv2 go list encoding/json/v2` fails with "build constraints exclude all Go files" (Go 1.27.4). Revisit when that opt-out is removed. | |
 | `newResponse` | Kept. The header values it sets share one array instead of one slice each, as net/http does when it parses headers; each is capped at its length, so an `append` copies instead of overwriting the next (`TestRespond_HeaderValuesIndependent`). 3 fewer allocations per problem response. | `d6dd793` |
 | `Response.MergeInto` | Examined, not changed. Copying every value into one shared array saved 2 to 4 allocations per response but was significantly slower in every adapter (+1.3% to +6.5%): the counting pass and the zeroing of one larger array cost more than the small allocations they replaced, which Go 1.27's allocator makes cheap. Reverted. | `65140e6`, reverted in `2c32282` |
-| `send` (`fiberprblm`) | Examined, not changed. Most of its time is fasthttp normalizing header keys in `PeekAll`, `Del` and `Add`. Replacing `Del` and `Add` with `Set` would normalize less, but `Set` replaces only the first of several values with the same name, so the merge rules would break for a header the handler set twice. `TestFasthttpSetKeepsLaterValues` (`fiberprblm/fasthttp_internal_test.go`) pins this fasthttp behavior. | |
+| `send` (`fiberprblm`) | Examined, not changed. Most of its time is fasthttp normalizing header keys in `PeekAll`, `Del` and `Add`. Replacing `Del` and `Add` with `Set` would normalize less, but `Set` replaces only the first of several values with the same name, so the merge rules would break for a header the handler set twice. `TestFasthttpSetKeepsLaterValues` (`adapters/fiberprblm/fasthttp_internal_test.go`) pins this fasthttp behavior. | |
 | `(*Problem).setExt` | Examined, not changed. The map holds the extension the enricher adds; making it is the cost of having an extension. | |
 
 #### XML optimizations

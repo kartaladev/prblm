@@ -13,13 +13,18 @@ their own modules in subdirectories, and depend on a released version of the roo
   | Module | Directory | Tag |
   |---|---|---|
   | `github.com/kartaladev/prblm` | `.` | `vX.Y.Z` |
-  | `github.com/kartaladev/prblm/ginprblm` | `ginprblm/` | `ginprblm/vX.Y.Z` |
-  | `github.com/kartaladev/prblm/fiberprblm` | `fiberprblm/` | `fiberprblm/vX.Y.Z` |
+  | `github.com/kartaladev/prblm/adapters/ginprblm` | `adapters/ginprblm/` | `adapters/ginprblm/vX.Y.Z` |
+  | `github.com/kartaladev/prblm/adapters/fiberprblm` | `adapters/fiberprblm/` | `adapters/fiberprblm/vX.Y.Z` |
   | `github.com/kartaladev/prblm/mappers/gormmap` | `mappers/gormmap/` | `mappers/gormmap/vX.Y.Z` |
   | `github.com/kartaladev/prblm/mappers/pgxmap` | `mappers/pgxmap/` | `mappers/pgxmap/vX.Y.Z` |
   | `github.com/kartaladev/prblm/mappers/validatormap` | `mappers/validatormap/` | `mappers/validatormap/vX.Y.Z` |
 
   `mappers/sqlmap` is a package of the root module, released with its tag.
+
+- Before v0.2.0 the adapters lived at the repository root: modules
+  `github.com/kartaladev/prblm/ginprblm` and `github.com/kartaladev/prblm/fiberprblm`, tagged
+  `ginprblm/v0.1.0` and `fiberprblm/v0.1.0`. Those tags stay published and are not developed
+  further; the adapters continue at `adapters/` from v0.2.0.
 
 - Tag the root module first. A module that depends on a new core feature is released only after
   the core release it needs, and its `go.mod` requires that version.
@@ -36,12 +41,13 @@ their own modules in subdirectories, and depend on a released version of the roo
 
    ```sh
    ./.github/scripts/check-core-deps.sh
-   ./.github/scripts/check-no-fiber.sh . ginprblm mappers/gormmap mappers/pgxmap mappers/validatormap
+   ./.github/scripts/check-no-fiber.sh . adapters/ginprblm mappers/gormmap mappers/pgxmap \
+     mappers/validatormap
    ./.github/scripts/check-test-only-deps.sh mappers/gormmap gorm.io/driver/sqlite github.com/mattn/go-sqlite3
    ./.github/scripts/check-test-only-deps.sh mappers/validatormap github.com/go-playground/locales/en \
      github.com/go-playground/locales/id
-   for module in . ginprblm fiberprblm internal/paritytest internal/plugintest mappers/gormmap \
-     mappers/pgxmap mappers/validatormap; do
+   for module in . adapters/ginprblm adapters/fiberprblm internal/paritytest internal/plugintest \
+     mappers/gormmap mappers/pgxmap mappers/validatormap; do
      (cd "$module" && go test -race ./... && go vet ./... && golangci-lint run ./... \
        && GOWORK=off go test ./...) || break
    done
@@ -55,31 +61,31 @@ their own modules in subdirectories, and depend on a released version of the roo
 2. Move the `[Unreleased]` entries in the module's `CHANGELOG.md` (the root one, or
    `<module>/CHANGELOG.md` when the module has one) under a heading for the new version and date.
 3. In a module other than the root, make sure `go.mod` requires released versions and has no
-   `replace` directive pointing into the repository. Until the first core release, `ginprblm` and
-   `fiberprblm` replace the core with `../`, and the modules in `mappers/` with `../..`: remove
-   that line and require the tagged core (`go get github.com/kartaladev/prblm@vX.Y.Z` with
-   `GOWORK=off`), then run `GOWORK=off go mod tidy` and `GOWORK=off go test -race ./...` against
-   the real tag before tagging them. Consumers ignore `replace` directives, so a published module
-   that still has one cannot be built. Check with `grep -l '^replace' */go.mod mappers/*/go.mod`,
-   which must list nothing; only the unpublished `internal/*/go.mod` keep their replaces.
+   `replace` directive pointing into the repository. A module in `adapters/` or `mappers/` that
+   was developed against an unreleased core may replace it with `../..`: remove that line and
+   require the tagged core (`go get github.com/kartaladev/prblm@vX.Y.Z` with `GOWORK=off`), then
+   run `GOWORK=off go mod tidy` and `GOWORK=off go test -race ./...` against the real tag before
+   tagging it. Consumers ignore `replace` directives, so a published module that still has one
+   cannot be built. Check with `grep -l '^replace' adapters/*/go.mod mappers/*/go.mod`, which must
+   list nothing; only the unpublished `internal/*/go.mod` keep their replaces.
 
 ## Tagging
 
 ```sh
-git tag -a v0.1.0 -m "prblm v0.1.0"   # the root module
-git push origin v0.1.0
+git tag -a vX.Y.Z -m "prblm vX.Y.Z"   # the root module
+git push origin vX.Y.Z
 ```
 
 For a module in a subdirectory, use the directory prefix:
 
 ```sh
-git tag -a ginprblm/v0.1.0 -m "ginprblm v0.1.0"
-git tag -a fiberprblm/v0.1.0 -m "fiberprblm v0.1.0"
-git tag -a mappers/gormmap/v0.1.0 -m "gormmap v0.1.0"
-git tag -a mappers/pgxmap/v0.1.0 -m "pgxmap v0.1.0"
-git tag -a mappers/validatormap/v0.1.0 -m "validatormap v0.1.0"
-git push origin ginprblm/v0.1.0 fiberprblm/v0.1.0 mappers/gormmap/v0.1.0 mappers/pgxmap/v0.1.0 \
-  mappers/validatormap/v0.1.0
+git tag -a adapters/ginprblm/vX.Y.Z -m "ginprblm vX.Y.Z"
+git tag -a adapters/fiberprblm/vX.Y.Z -m "fiberprblm vX.Y.Z"
+git tag -a mappers/gormmap/vX.Y.Z -m "gormmap vX.Y.Z"
+git tag -a mappers/pgxmap/vX.Y.Z -m "pgxmap vX.Y.Z"
+git tag -a mappers/validatormap/vX.Y.Z -m "validatormap vX.Y.Z"
+git push origin adapters/ginprblm/vX.Y.Z adapters/fiberprblm/vX.Y.Z mappers/gormmap/vX.Y.Z \
+  mappers/pgxmap/vX.Y.Z mappers/validatormap/vX.Y.Z
 ```
 
 ## Checking the release
@@ -87,12 +93,12 @@ git push origin ginprblm/v0.1.0 fiberprblm/v0.1.0 mappers/gormmap/v0.1.0 mappers
 After the push, confirm that the Go toolchain resolves the version outside the workspace:
 
 ```sh
-GOWORK=off go list -m github.com/kartaladev/prblm@v0.1.0
-GOWORK=off go list -m github.com/kartaladev/prblm/ginprblm@v0.1.0
-GOWORK=off go list -m github.com/kartaladev/prblm/fiberprblm@v0.1.0
-GOWORK=off go list -m github.com/kartaladev/prblm/mappers/gormmap@v0.1.0
-GOWORK=off go list -m github.com/kartaladev/prblm/mappers/pgxmap@v0.1.0
-GOWORK=off go list -m github.com/kartaladev/prblm/mappers/validatormap@v0.1.0
+GOWORK=off go list -m github.com/kartaladev/prblm@vX.Y.Z
+GOWORK=off go list -m github.com/kartaladev/prblm/adapters/ginprblm@vX.Y.Z
+GOWORK=off go list -m github.com/kartaladev/prblm/adapters/fiberprblm@vX.Y.Z
+GOWORK=off go list -m github.com/kartaladev/prblm/mappers/gormmap@vX.Y.Z
+GOWORK=off go list -m github.com/kartaladev/prblm/mappers/pgxmap@vX.Y.Z
+GOWORK=off go list -m github.com/kartaladev/prblm/mappers/validatormap@vX.Y.Z
 ```
 
 To rehearse this before pushing, point the module path at a local clone that carries the tag, and
@@ -104,11 +110,11 @@ export GIT_CONFIG_GLOBAL=$(mktemp) GOMODCACHE=$(mktemp -d)
 git config --file "$GIT_CONFIG_GLOBAL" protocol.file.allow always
 git config --file "$GIT_CONFIG_GLOBAL" url."file://$PWD".insteadOf https://github.com/kartaladev/prblm
 cd "$(mktemp -d)"   # outside the repository and its go.work
-for module in github.com/kartaladev/prblm github.com/kartaladev/prblm/ginprblm \
-  github.com/kartaladev/prblm/fiberprblm github.com/kartaladev/prblm/mappers/gormmap \
+for module in github.com/kartaladev/prblm github.com/kartaladev/prblm/adapters/ginprblm \
+  github.com/kartaladev/prblm/adapters/fiberprblm github.com/kartaladev/prblm/mappers/gormmap \
   github.com/kartaladev/prblm/mappers/pgxmap github.com/kartaladev/prblm/mappers/validatormap; do
   GOWORK=off GOPROXY=direct GONOSUMDB=github.com/kartaladev/prblm GOFLAGS='-mod=mod -modcacherw' \
-    go list -m "$module@v0.1.0"
+    go list -m "$module@vX.Y.Z"
 done
 ```
 

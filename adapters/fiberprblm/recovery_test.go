@@ -10,7 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kartaladev/prblm"
-	"github.com/kartaladev/prblm/fiberprblm"
+	"github.com/kartaladev/prblm/adapters/fiberprblm"
 )
 
 // loadVessel returns a handler that panics with v, named so the stack can

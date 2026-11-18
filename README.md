@@ -475,10 +475,15 @@ the headers already set on the framework's response by the same rules as the net
 problem headers replace existing ones, `Vary` keeps the existing field names and adds `Accept`,
 and a `Cache-Control` the handler set is kept.
 
+The adapters are separate modules under `adapters/`, so an application downloads only the framework
+it uses. Before v0.2.0 they were at `github.com/kartaladev/prblm/ginprblm` and
+`github.com/kartaladev/prblm/fiberprblm`; when upgrading, change the import path to the `adapters/`
+one. The package names, `ginprblm` and `fiberprblm`, are unchanged.
+
 ### gin
 
 ```sh
-go get github.com/kartaladev/prblm/ginprblm
+go get github.com/kartaladev/prblm/adapters/ginprblm
 ```
 
 `ginprblm.Middleware` turns the last error recorded with `c.Error` into a problem, once the
@@ -565,7 +570,7 @@ engine.Use(ginprblm.Middleware(
 ### fiber
 
 ```sh
-go get github.com/kartaladev/prblm/fiberprblm
+go get github.com/kartaladev/prblm/adapters/fiberprblm
 ```
 
 `fiberprblm.ErrorHandler` is the application's error handler: every error a handler returns, and
@@ -815,9 +820,9 @@ The core's hot paths on their own (`BenchmarkResolve`, `BenchmarkRespond`, `Benc
 
 ### gin
 
-`BenchmarkMiddleware` (`ginprblm/bench_test.go`): a `gin.Engine` with `Recovery` and `Middleware`
-installed with `engine.Use`, a route recording an error with `c.Error`, and the problem response.
-The `baseline` row is a route answering with `c.Data`, without prblm.
+`BenchmarkMiddleware` (`adapters/ginprblm/bench_test.go`): a `gin.Engine` with `Recovery` and
+`Middleware` installed with `engine.Use`, a route recording an error with `c.Error`, and the problem
+response. The `baseline` row is a route answering with `c.Data`, without prblm.
 
 Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. prblm v0.1.0,
 gin v1.12.0. Raw file: `bench/results/ginprblm-2026-11-18-940c33f.txt`.
@@ -839,10 +844,10 @@ with the next core release: measured against the repository's core, its `xml` ca
 
 ### fiber
 
-`BenchmarkErrorHandler` (`fiberprblm/bench_test.go`): a fiber app with `ErrorHandler` and
-`Recovery`, a route returning an error, and the problem response, driven through the app's
-fasthttp handler without a network round trip. The `baseline` row is a route answering with
-`c.Send`, without prblm.
+`BenchmarkErrorHandler` (`adapters/fiberprblm/bench_test.go`): a fiber app with `ErrorHandler` and
+`Recovery`, a route returning an error, and the problem response, driven through the app's fasthttp
+handler without a network round trip. The `baseline` row is a route answering with `c.Send`, without
+prblm.
 
 Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. prblm v0.1.0,
 fiber v3.7.0, fasthttp v1.78.0. Raw file: `bench/results/fiberprblm-2026-11-18-940c33f.txt`.

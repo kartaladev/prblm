@@ -1,4 +1,4 @@
-module github.com/kartaladev/prblm/ginprblm
+module github.com/kartaladev/prblm/adapters/ginprblm
 
 go 1.27
 
