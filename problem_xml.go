@@ -28,8 +28,6 @@ var xmlWriters = sync.Pool{
 func marshalXML(p *Problem) ([]byte, error) {
 	var buf bytes.Buffer
 
-	buf.WriteString(xml.Header)
-
 	// Reset discards whatever an earlier document that failed or panicked
 	// left buffered, so documents never share output.
 	w, _ := xmlWriters.Get().(*bufio.Writer)
@@ -41,6 +39,11 @@ func marshalXML(p *Problem) ([]byte, error) {
 		w.Reset(nil)
 		xmlWriters.Put(w)
 	}()
+
+	// The declaration goes through w too, so that a document smaller than
+	// w's buffer reaches buf in one write. Writing to a bytes.Buffer cannot
+	// fail, and Encode's flush would report it if it did.
+	_, _ = w.WriteString(xml.Header)
 
 	if err := xml.NewEncoder(w).Encode(p); err != nil {
 		return nil, err
