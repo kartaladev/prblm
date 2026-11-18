@@ -220,3 +220,28 @@ are pending an idle machine.
 Below the threshold, `Response.MergeInto` makes about 8% of the bytes but 18% to 26% of the
 allocations: it copies every header value of the problem response into the response writer's
 header.
+
+### What was done with each candidate
+
+Each optimization is compared with `benchstat`, old against new, `-count 10`. Allocation counts do
+not depend on machine load, so they are compared at any time with a fixed iteration count:
+
+```sh
+go test -run '^$' -bench 'Benchmark(Wrap|Respond)$' -benchmem -benchtime 2000x -count 10 . > new.txt
+benchstat old.txt new.txt
+```
+
+An optimization is kept only if time/op also shows no significant regression on an idle machine;
+until that run, the kept ones below are provisional.
+
+| Candidate | Decision | Commit | `xml` case, B/op · allocs/op |
+|---|---|---|---|
+| `xmlenc.decodeTree` | A string value skips the JSON round trip: the XML is the same, because the XML encoder replaces invalid UTF-8 as `encoding/json` does (tested under both Go 1.27 JSON implementations, the default and `GOEXPERIMENT=nojsonv2`). | `60d4b7c` | 8.9 KB → 6.3 KB · 86 → 44 |
+| `marshalXML` | The 4 KB `bufio.Writer` comes from a `sync.Pool`, as in net/http: `xml.NewEncoder` reuses a `*bufio.Writer` of at least 4 KB. The writer is fixed-size and never reaches consumer code; `TestRespond_XMLIsolated` covers failed, panicking and large documents concurrently. | `8359978` | 6.3 KB → 2.2 KB · 44 → 42 |
+| `Problem.MarshalJSON` | Not changed yet. Go 1.27's `encoding/json/v2` (`MarshalerTo`, `MarshalWrite`) would write the members in one pass instead of two `Marshal` calls and a join, but importing it breaks every build with `GOEXPERIMENT=nojsonv2`, which Go 1.27 still supports. Revisit when that opt-out is removed. | | |
+| `newResponse` | Open. One backing array for the header values it sets (the trick net/http uses), each value capped so an `append` cannot overwrite its neighbor, would turn 6 allocations into about 2. | | |
+| `(*Problem).setExt` | Examined, not changed. The map holds the extension the enricher adds; making it is the cost of having an extension. | | |
+
+The `xml` case went from 9.0 KB and 86 allocations to 2.2 KB and 42 per request; the other cases are
+unchanged. The adapters use the same code, so their `xml` rows change by the same amounts when run
+in workspace mode.
