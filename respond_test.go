@@ -631,6 +631,56 @@ func TestResponse_MergeInto_NilDestination(t *testing.T) {
 	res.MergeInto(nil)
 }
 
+// Each merged header's values stand alone: appending to one never changes
+// another, whatever storage the merge used.
+func TestResponse_MergeInto_ValuesIndependent(t *testing.T) {
+	t.Parallel()
+
+	res := prblm.Response{Header: http.Header{
+		"X-A":           {"a1"},
+		"X-B":           {"b1", "b2"},
+		"X-C":           {"c1"},
+		"Cache-Control": {"no-store"},
+	}}
+	dst := http.Header{}
+
+	res.MergeInto(dst)
+
+	for name := range res.Header {
+		dst[name] = append(dst[name], "added")
+	}
+
+	for name, values := range res.Header {
+		if want := append(slices.Clone(values), "added"); !slices.Equal(dst[name], want) {
+			t.Errorf("%s = %q after appending to every header, want %q", name, dst[name], want)
+		}
+	}
+}
+
+// The headers of a response stand alone the same way.
+func TestRespond_HeaderValuesIndependent(t *testing.T) {
+	t.Parallel()
+
+	req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7"}
+
+	res, ok := mapping(prblm.New(http.StatusNotFound)).Respond(t.Context(), req, errVesselNotFound)
+	if !ok {
+		t.Fatal("Respond() reported nothing to write")
+	}
+
+	before := res.Header.Clone()
+
+	for name := range res.Header {
+		res.Header[name] = append(res.Header[name], "added")
+	}
+
+	for name, values := range before {
+		if want := append(slices.Clone(values), "added"); !slices.Equal(res.Header[name], want) {
+			t.Errorf("%s = %q after appending to every header, want %q", name, res.Header[name], want)
+		}
+	}
+}
+
 func TestResponse_MergeInto_NoAliasing(t *testing.T) {
 	t.Parallel()
 
