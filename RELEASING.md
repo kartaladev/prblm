@@ -121,3 +121,18 @@ done
 Tags are immutable once published: the module proxy and checksum database keep the first content
 they see. To fix a bad release, publish a new patch version, and retract the bad one in `go.mod`
 if it must not be used.
+
+## Publishing the GitHub Release
+
+Go resolves versions from the tags alone, but the repository's Releases page lists only what is
+published there. After the tags resolve, publish one GitHub Release per release, on the root
+module's tag, covering every module tagged with it:
+
+```sh
+gh release create vX.Y.Z --verify-tag --title vX.Y.Z --latest --notes-file notes.md
+```
+
+The notes list each module and its version (including the modules that were not re-released), the
+`go get` commands, the upgrade steps for every breaking change, and the release's entries from each
+module's `CHANGELOG.md`. Links in the notes are absolute: a relative link such as `BENCHMARKS.md`
+does not resolve on the Releases page.
