@@ -250,9 +250,9 @@ significant regression in any other case, step by step.
 | `xmlenc.decodeTree` | Kept. A string value skips the JSON round trip: the XML is the same, because the XML encoder replaces invalid UTF-8 as `encoding/json` does (tested under both Go 1.27 JSON implementations, the default and `GOEXPERIMENT=nojsonv2`). | `60d4b7c` |
 | `marshalXML` | Kept. The 4 KB `bufio.Writer` comes from a `sync.Pool`, as in net/http: `xml.NewEncoder` reuses a `*bufio.Writer` of at least 4 KB. The writer is fixed-size and never reaches consumer code; `TestRespond_XMLIsolated` covers failed, panicking and large documents concurrently. | `8359978` |
 | `Problem.MarshalJSON` | Not changed. Go 1.27's `encoding/json/v2` (`MarshalerTo`, `MarshalWrite`) would write the members in one pass instead of two `Marshal` calls and a join, but importing it breaks every build with `GOEXPERIMENT=nojsonv2`, which Go 1.27 still supports. Revisit when that opt-out is removed. | |
-| `newResponse` | Open. | |
-| `Response.MergeInto` | Open. | |
-| `send` (`fiberprblm`) | Open. | |
+| `newResponse` | Kept. The header values it sets share one array instead of one slice each, as net/http does when it parses headers; each is capped at its length, so an `append` copies instead of overwriting the next (`TestRespond_HeaderValuesIndependent`). 3 fewer allocations per problem response. | `d6dd793` |
+| `Response.MergeInto` | Examined, not changed. Copying every value into one shared array saved 2 to 4 allocations per response but was significantly slower in every adapter (+1.3% to +6.5%): the counting pass and the zeroing of one larger array cost more than the small allocations they replaced, which Go 1.27's allocator makes cheap. Reverted. | `65140e6`, reverted in `2c32282` |
+| `send` (`fiberprblm`) | Examined, not changed. Most of its time is fasthttp normalizing header keys in `PeekAll`, `Del` and `Add`. Replacing `Del` and `Add` with `Set` would normalize less, but `Set` replaces only the first of several values with the same name, so the merge rules would break for a header the handler set twice. | |
 | `(*Problem).setExt` | Examined, not changed. The map holds the extension the enricher adds; making it is the cost of having an extension. | |
 
 #### XML optimizations
@@ -276,3 +276,25 @@ benchstat bench/results/compare-2026-11-18-xml/core-{15e98f2,60d4b7c,8359978}.tx
 | net/http, allocs/op | 86 | 44 | 42 |
 
 `Respond/xml` moved alike: 3.083µ, 1.590µ, 1.276µ.
+
+#### Header optimizations
+
+The raw files are in `bench/results/compare-2026-11-18-headers/`: `8359978` (before), `d6dd793`
+(`newResponse`) and `65140e6` (`MergeInto`, reverted).
+
+```sh
+benchstat bench/results/compare-2026-11-18-headers/core-{8359978,d6dd793}.txt
+benchstat bench/results/compare-2026-11-18-headers/core-{d6dd793,65140e6}.txt
+```
+
+| Case, time/op | `8359978` | `d6dd793` | `65140e6` (reverted) |
+|---|---|---|---|
+| net/http `mapped-json` | 1.251µ ± 2% | 1.185µ ± 2% (−5.32%, p=0.000) | 1.211µ ± 2% (+2.24%, p=0.007) |
+| net/http `discovery-304` | 576.1n ± 2% | 573.0n ± 1% (~) | 601.4n ± 1% (+4.94%, p=0.000) |
+| gin `mapped-json` | 1.394µ ± 2% | 1.331µ ± 3% (−4.52%, p=0.000) | 1.353µ ± 2% (~) |
+| gin `discovery-304` | 426.3n ± 2% | 426.0n ± 2% (~) | 453.9n ± 1% (+6.54%, p=0.000) |
+| fiber `mapped-json` | 1.808µ ± 1% | 1.736µ ± 1% (−3.96%, p=0.000) | 1.759µ ± 1% (+1.30%, p=0.001) |
+| fiber `discovery-304` | 872.9n ± 1% | 868.1n ± 1% (~) | 895.4n ± 1% (+3.15%, p=0.000) |
+
+`d6dd793` made every problem case 3% to 8% faster in every adapter and slowed none; discovery pages
+are built by `newResponse` once, not per request. `Respond/json` went from 979.9n to 903.0n (−7.85%).
