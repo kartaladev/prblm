@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/kartaladev/prblm"
@@ -330,6 +332,85 @@ func TestRespond_XML(t *testing.T) {
 			}
 		})
 	}
+}
+
+// XML documents encoded one after another, or concurrently, never share
+// output: a document that failed or panicked halfway, or that outgrew the
+// encoder's 4 KiB buffer, leaves nothing in the next one.
+func TestRespond_XMLIsolated(t *testing.T) {
+	t.Parallel()
+
+	const (
+		xmlHead  = `<?xml version="1.0" encoding="UTF-8"?>` + "\n"
+		requests = 64
+	)
+
+	type outcome struct {
+		problem *prblm.Problem
+		body    string
+	}
+
+	outcomes := make([]outcome, requests)
+	for i := range outcomes {
+		p := prblm.New(http.StatusConflict)
+		p.Detail = fmt.Sprintf("request %d %s", i, strings.Repeat("x", i%3*3000))
+
+		body := xmlHead + `<problem xmlns="urn:ietf:rfc:7807"><title>Conflict</title><status>409</status>` +
+			`<detail>` + p.Detail + `</detail><instance>/v1/vessels/7</instance></problem>`
+
+		switch i % 4 {
+		case 1: // fails after the members were written
+			if err := p.Set("meta", map[string]int{"file.name": 1}); err != nil {
+				t.Fatal(err)
+			}
+
+			body = `{"title":"Internal Server Error","status":500}`
+		case 2: // panics after the members were written
+			if err := p.Set("meta", panickyValue{}); err != nil {
+				t.Fatal(err)
+			}
+
+			body = `{"title":"Internal Server Error","status":500}`
+		}
+
+		outcomes[i] = outcome{problem: p, body: body}
+	}
+
+	respond := func(t *testing.T, o outcome) {
+		t.Helper()
+
+		req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7", Accept: problemXMLType}
+
+		res, ok := mapping(o.problem).Respond(t.Context(), req, errVesselNotFound)
+		if !ok {
+			t.Error("Respond() reported nothing to write")
+
+			return
+		}
+
+		if string(res.Body) != o.body {
+			t.Errorf("body = %.200s\nwant   %.200s", res.Body, o.body)
+		}
+	}
+
+	t.Run("sequential", func(t *testing.T) {
+		t.Parallel()
+
+		for _, o := range outcomes {
+			respond(t, o)
+		}
+	})
+
+	t.Run("concurrent", func(t *testing.T) {
+		t.Parallel()
+
+		var wg sync.WaitGroup
+		for _, o := range outcomes {
+			wg.Go(func() { respond(t, o) })
+		}
+
+		wg.Wait()
+	})
 }
 
 // panickyValue is an extension value whose JSON encoding panics.
