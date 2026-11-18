@@ -24,7 +24,8 @@ var ErrInvalidName = errors.New("xmlenc: invalid element name")
 //
 // The value goes through encoding/json first, so its XML has the same
 // structure as its JSON: json tags and options apply, and a value JSON cannot
-// encode is an error. Names, including object keys, must be an ASCII letter
+// encode is an error. A plain string skips that step and is written as it is,
+// with the same result. Names, including object keys, must be an ASCII letter
 // followed by ASCII letters, digits or underscores; any other name is an
 // error wrapping [ErrInvalidName].
 //

@@ -14,17 +14,14 @@ import (
 // (RFC 9457, Appendix B).
 const xmlNamespace = "urn:ietf:rfc:7807"
 
-// xmlBufferSize is the buffer size xml.NewEncoder gives the writer it makes.
-// It reuses a *bufio.Writer at least this large instead.
-const xmlBufferSize = 4096
-
 // xmlWriters holds the buffered writers marshalXML encodes through, so that
 // a document does not make its own 4 KiB buffer, as net/http pools its
-// bufio.Writers. The buffer never grows, and the writer never reaches
-// consumer code: extension values are encoded by encoding/json, not through
-// the XML encoder.
+// bufio.Writers. xml.NewEncoder makes its writer with bufio.NewWriter, which
+// returns a *bufio.Writer of the default size as it is, so it reuses these.
+// The buffer never grows, and the writer never reaches consumer code:
+// extension values are encoded by encoding/json, not through the XML encoder.
 var xmlWriters = sync.Pool{
-	New: func() any { return bufio.NewWriterSize(nil, xmlBufferSize) },
+	New: func() any { return bufio.NewWriter(nil) },
 }
 
 // marshalXML encodes p as a complete XML document, with the XML declaration.
