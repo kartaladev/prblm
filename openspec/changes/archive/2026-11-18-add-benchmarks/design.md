@@ -6,11 +6,11 @@ The motivation and scope are in proposal.md (Why, Scope by Gall's Law). This cha
 
 What exists today:
 - **Request paths:**
-  - **net/http:** `Handler.Wrap` → `answer` → `Respond` → `trackingWriter.send`.
+  - **net/http:** `Handler.Recover` → `Handler.Wrap` → `answer` → `Respond` → `trackingWriter.send`.
   - **gin:** `Middleware` installs a `deferredWriter`, runs `c.Next()`, then `finish` → `respond` → `send`.
   - **fiber:** `ErrorHandler` → `respond` → `send` into fasthttp's response header.
   - **discovery:** pre-rendered pages, served by `serveDiscovery` in all three.
-- **Benchmarks:** only `BenchmarkIsSubtype` (`namespace_internal_test.go`).
+- **Benchmarks:** `BenchmarkIsSubtype` (`namespace_internal_test.go`), and `BenchmarkRespond_JSON` and `BenchmarkRespond_XML`. Those two are replaced by `BenchmarkRespond` (json, xml) and `BenchmarkNegotiate` (slice 2).
 - **CI** (`.github/workflows/ci.yml`) runs `go test -race ./...` and `GOWORK=off go test ./...`. Shared runners are too noisy to time anything.
 - **fiber:** `fiberprblm` already requires `github.com/valyala/fasthttp` indirectly, through fiber. `app.Handler()` returns a `fasthttp.RequestHandler`.
 - **Scheduling (proposal, Why):** measurement runs only when the maintainer's machine is idle. Writing code and docs does not wait for that.
@@ -37,10 +37,10 @@ Each slice has two kinds of task:
 A slice is complete when both are done. Its code tasks may land earlier, because a benchmark is useful (and smoke-tested) before it has published numbers.
 
 1. **net/http, one case, end to end.**
-   - At its end: `BenchmarkWrap/mapped-json`, with a mapped error through `Handler.Wrap` to a JSON problem, and its `baseline` row run with `-benchmem`. The README has a "Performance → net/http" subsection and BENCHMARKS.md has the command. On an idle run, the raw output is committed and the table filled.
+   - At its end: `BenchmarkWrap/mapped-json`, with a mapped error through `Handler.Recover(Handler.Wrap(...))` to a JSON problem, and its `baseline` row run with `-benchmem`. The README has a "Performance → net/http" subsection and BENCHMARKS.md has the command. On an idle run, the raw output is committed and the table filled.
    - Hot paths measured: resolution (handler mapper), finalization and enrichment, JSON encoding, response writing in net/http.
 2. **net/http, every case, and the core micro-benchmarks.**
-   - At its end, the cases from the proposal: fallback-500, xml, resolved-type, discovery-200, discovery-304. Also `BenchmarkResolve`, `BenchmarkRespond` (json, xml), `BenchmarkNegotiate` and `BenchmarkResolveType`, next to the existing `BenchmarkIsSubtype`.
+   - At its end, the cases from the proposal: fallback-500, xml, resolved-type, discovery-200, discovery-304. Also `BenchmarkResolve`, `BenchmarkRespond` (json, xml), `BenchmarkNegotiate` and `BenchmarkResolveType`, next to the existing `BenchmarkIsSubtype`. `BenchmarkRespond` and `BenchmarkNegotiate` replace the earlier `BenchmarkRespond_JSON` and `BenchmarkRespond_XML`.
    - Hot paths measured: Accept negotiation, XML encoding, type resolution, discovery serving.
 3. **gin.**
    - At its end: `BenchmarkMiddleware` in `ginprblm` with the same six cases plus a baseline, and the README "Performance → gin" subsection.
@@ -77,15 +77,18 @@ Slice 1 works on its own: one benchmark, one documented command, one table. No s
 
 **Requests.** Requests are built once, before `b.Loop()`. The context is never canceled, and the body is `http.NoBody`.
 
-**fiber.** Each iteration drives `app.Handler()` with a `fasthttp.RequestCtx` initialized from a request built once and copied into the context (`req.CopyTo`), so no state leaks between iterations. This makes `github.com/valyala/fasthttp` a direct requirement of `fiberprblm`. It is already in that module's graph through fiber, so no new module is added, and the core is untouched. `app.Test` is rejected, because it goes over an in-memory network connection and measures that.
+**net/http.** The server is built like `internal/paritytest` builds it: the route handler is `h.Recover(h.Wrap(...))` on a `ServeMux`, with `h.Discovery()` mounted at the discovery path. All three adapters then measure recovery plus handling (gin installs `Recovery` and `Middleware`, fiber installs `Recovery` and `ErrorHandler`).
+
+**fiber.** One `fasthttp.RequestCtx` is initialized once, before the loop, and reused, as fasthttp's server reuses it for the requests of a kept-alive connection. Before every request the response is reset and a request built once is copied into the context (`req.CopyTo`), so context initialization is not counted and no state leaks between iterations. This makes `github.com/valyala/fasthttp` a direct requirement of `fiberprblm`. It is already in that module's graph through fiber, so no new module is added, and the core is untouched. `app.Test` is rejected, because it goes over an in-memory network connection and measures that.
 
 **Baselines.** Each adapter has a `baseline` case: a handler that writes the same status and a fixed JSON error body without prblm. "prblm overhead" is the difference from it.
 
 - **Failure modes:**
   - **A benchmark measures a broken path** (for example a mapper that no longer matches, so every iteration is the 500 fallback). Before `b.Loop()`, each case serves one request and fails with `b.Fatalf` unless the status, Content-Type and a body marker are what the case expects.
   - **The compiler optimizes work away:** each iteration's observable result (status and byte count) is written to a package-level sink.
-  - **Header maps grow across iterations:** the `discardWriter` clears its map each iteration. The gin engine and fiber app are built once and reused, which is how they run in production.
-  - **fiber context reuse leaks state:** a fresh `RequestCtx` per iteration, initialized from the copied request. It is checked by the pre-loop assertion and by the same case run twice in the smoke test.
+  - **Header maps grow across iterations:** the `discardWriter` clears its map each iteration. The net/http server, gin engine and fiber app are built once per case, before the loop, and reused, which is how they run in production.
+  - **fiber context reuse leaks state:** the response is reset and the request copied in before every request. Before the loop, the response of the reused context, after it served a different request (the 200 that supplies the ETag of the revalidating case, or another case's request), is compared with the response of a freshly initialized `RequestCtx` for the same request; they must be the same. The pre-loop assertion checks the expected response too.
+  - **A case is checked too weakly to catch a leak or a wrong path:** `discovery-304` must have an empty body, and `fallback-500` must not contain its error's text (`hunter2`), in every adapter.
 
 ### D3. Cases, one table per module
 
@@ -93,15 +96,15 @@ Slice 1 works on its own: one benchmark, one documented command, one table. No s
 |---|---|---|
 | `baseline` | `GET /v1/vessels/7` | 404, fixed JSON body, no prblm |
 | `mapped-json` | `GET /v1/vessels/7`, mapped `errVesselNotFound` | 404 `application/problem+json` |
-| `fallback-500` | `GET /v1/vessels/7`, unmapped error | 500 `application/problem+json` |
+| `fallback-500` | `GET /v1/vessels/7`, unmapped error | 500 `application/problem+json`, without the error's text |
 | `xml` | `GET /v1/vessels/7`, `Accept: application/problem+xml` | 404 `application/problem+xml` |
 | `resolved-type` | `GET /v1/contracts/7`, `BlacklistedSupplier.New()` with namespace `/v1/api/probs` | 409, resolved `type` |
 | `discovery-200` | `GET /v1/api/probs/contracts/blacklisted-supplier`, `Accept: application/json` | 200 `application/json` |
-| `discovery-304` | same, with the matching `If-None-Match` | 304 |
+| `discovery-304` | same, with the matching `If-None-Match` | 304, empty body |
 
 Every case runs with one enricher (`trace_id`) and an `OnError` hook that does nothing. Those are the shape of a real configuration, and they make the hook call part of the measured path.
 
-- **Failure mode:** the cases diverge from the parity cases → the cases reuse the parity test's errors, options and paths, so a bug in one shows up in both.
+- **Failure mode:** the cases diverge from the parity cases → the cases mirror the parity test's errors, options and paths (each module defines its own copy), so a bug in one shows up in both.
 
 ### D4. Measurement protocol (idle machine)
 
@@ -109,8 +112,8 @@ The protocol is documented in BENCHMARKS.md and is the only way numbers are prod
 1. **Prepare the machine:**
    - idle: no builds, browsers or IDE indexing
    - on mains power, after 2 minutes of rest
-   - record `go version`, `go env GOOS GOARCH`, the CPU model (`sysctl -n machdep.cpu.brand_string` on macOS, `lscpu` on Linux) and the commit SHA
-2. **Run:** `go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s` per module, with `GOWORK=off` for the published modules.
+   - record `go version`, `go env GOOS GOARCH`, the CPU model (`sysctl -n machdep.cpu.brand_string` on macOS, `lscpu` on Linux), the commit SHA, and the module versions each adapter is measured against (`GOWORK=off go list -m` of `github.com/kartaladev/prblm` and its framework, in the adapter's directory)
+2. **Run:** `go test -run '^$' -bench . -benchmem -count 10 -benchtime 1s` per module, with `GOWORK=off` for the published modules. Under `GOWORK=off` an adapter is measured against the released core named in its `go.mod`, not the core in the repository; the published adapter tables are re-measured after each core release. Results record the module versions (step 1).
 3. **Save the raw output** to `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt` in a committed directory.
 4. **Summarize** with `benchstat` (`go install golang.org/x/perf/cmd/benchstat@latest`). The README tables are `benchstat` output.
 
@@ -121,6 +124,7 @@ The protocol is documented in BENCHMARKS.md and is the only way numbers are prod
   - **A noisy run:** `benchstat` reports the ± spread. A row above ±5% is re-run. If it stays above, the published table marks the variance.
   - **Thermal throttling** on a laptop: the 2-minute rest, `-count 10` and the variance check. The README states the machine, so readers can judge.
   - **Results from different machines get mixed:** every raw file name carries the date and SHA, every README table names its machine, and comparisons only use files from the same machine.
+  - **An adapter table measures a different core than the reader assumes:** each table records the module versions, and a core release triggers a re-measurement of the adapter tables.
 
 ### D5. Profiles
 
@@ -137,7 +141,7 @@ CPU and memory profiles are taken per adapter (*idle machine*) with `-cpuprofile
 **Each candidate:**
 1. Is optimized in its own commit. A structural refactor that enables it is a separate, earlier commit, because the refactoring rules keep structural and behavioral commits apart.
 2. Keeps every suite green: the core, `ginprblm`, `fiberprblm` and `internal/paritytest` with `-race`, and `GOWORK=off` for the published modules. The parity test proves the output bytes are unchanged.
-3. Is compared with `benchstat` on the same machine, `-count 10`, old against new. It is kept only for a significant improvement (p < 0.05) in time/op or allocs/op on at least one request-path case, with no significant regression in any other case. Otherwise it is reverted, and recorded as "examined, not changed".
+3. Is compared with `benchstat` on the same machine, `-count 10`, old against new. An optimization in the core is compared in the adapters in workspace mode (`go.work`), because under `GOWORK=off` an adapter still runs the released core and would not see it. It is kept only for a significant improvement (p < 0.05) in time/op or allocs/op on at least one request-path case, with no significant regression in any other case. Otherwise it is reverted, and recorded as "examined, not changed".
 4. Gets its hot path's coverage re-checked with `go tool cover -func`.
 
 The following are excluded:
@@ -152,7 +156,7 @@ The following are excluded:
 
 ### D7. CI smoke run
 
-One step per module: `go test -run '^$' -bench . -benchtime 1x ./...`. It checks that benchmarks compile, that their pre-loop assertions pass and that they don't panic. It publishes no timing and gates nothing on speed.
+One step per module: `go test -run '^$' -bench . -benchtime 1x ./...`, and for `ginprblm` and `fiberprblm` the same command with `GOWORK=off`, the released-core configuration the published numbers use. It checks that benchmarks compile, that their pre-loop assertions pass and that they don't panic. It publishes no timing and gates nothing on speed.
 
 - **Failure mode:** CI gets slower → 1x runs each benchmark once, which costs a few seconds per module.
 
@@ -174,7 +178,7 @@ Nothing configurable changes; see proposal.md, Defaults and Customization.
 
 ## Risks / Trade-offs
 
-- [Numbers depend on the machine and are read as absolute claims] → Each table names its machine, OS, Go version and SHA, and shows the baseline next to prblm. Readers compare overhead, not absolute times.
+- [Numbers depend on the machine and are read as absolute claims] → Each table names its machine, OS, Go version, module versions and SHA, and shows the baseline next to prblm. Readers compare overhead, not absolute times.
 - [The idle-machine measurement waits on the maintainer] → Code tasks land independently, and the README shows the subsection with "results pending" until the measured run is committed.
 - [Profiles point at framework code that can't be changed here] → The README reports it as context (D5), and nothing outside this repository is changed.
 - [An optimization makes code harder to read for a small gain] → The D6 thresholds plus significance rule, and the refactoring rule that a speed gain does not excuse unreadable code. A gain below the threshold is reverted.

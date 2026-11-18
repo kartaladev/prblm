@@ -24,13 +24,23 @@ var ErrInvalidName = errors.New("xmlenc: invalid element name")
 //
 // The value goes through encoding/json first, so its XML has the same
 // structure as its JSON: json tags and options apply, and a value JSON cannot
-// encode is an error. Names, including object keys, must be an ASCII letter
+// encode is an error. A plain string skips that step with the same result:
+// its text is written with invalid UTF-8 and characters XML does not allow
+// replaced by U+FFFD. Names, including object keys, must be an ASCII letter
 // followed by ASCII letters, digits or underscores; any other name is an
 // error wrapping [ErrInvalidName].
 //
 // On error, e may hold part of the element, so the caller must discard what
 // was written.
 func Encode(e *xml.Encoder, name string, value any) error {
+	// A string is written directly: the XML is the same as after the JSON
+	// round trip, because the XML encoder replaces each invalid UTF-8 byte
+	// with U+FFFD as encoding/json does. The round trip it skips made about
+	// half the allocations of an XML problem, whose members are strings.
+	if s, ok := value.(string); ok {
+		return walk(e, name, s)
+	}
+
 	var tree any
 
 	b, err := json.Marshal(value)

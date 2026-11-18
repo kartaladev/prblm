@@ -54,6 +54,26 @@ jobs:
         run: go test -race ./...
       - name: test (module only)
         run: GOWORK=off go test ./...
+      - name: test (GOEXPERIMENT=nojsonv2)
+        # Go 1.27 still lets a build opt out of the encoding/json v2
+        # implementation. The core must behave the same under both: the XML
+        # encoder writes strings directly because both replace invalid UTF-8
+        # as the XML encoder does.
+        if: matrix.module == '.'
+        run: GOEXPERIMENT=nojsonv2 go test ./...
+      - name: benchmarks (smoke, once each)
+        # Each benchmark runs once, so it keeps compiling, its pre-loop
+        # checks pass and it doesn't panic. Shared runners are too noisy to
+        # time anything: no timings are published and nothing is gated on
+        # speed (BENCHMARKS.md has the measurement protocol).
+        if: contains(fromJSON('[".", "ginprblm", "fiberprblm"]'), matrix.module)
+        run: go test -run '^$' -bench . -benchtime 1x ./...
+      - name: benchmarks (smoke, once each, module only)
+        # The published adapter numbers are measured with GOWORK=off,
+        # against the released core named in each go.mod, so that
+        # configuration must keep running too.
+        if: contains(fromJSON('["ginprblm", "fiberprblm"]'), matrix.module)
+        run: GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...
 
   lint:
     runs-on: ubuntu-latest

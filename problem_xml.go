@@ -1,24 +1,51 @@
 package prblm
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 // xmlNamespace is the namespace of an application/problem+xml document
 // (RFC 9457, Appendix B).
 const xmlNamespace = "urn:ietf:rfc:7807"
 
+// xmlWriters holds the buffered writers marshalXML encodes through, so that
+// a document does not make its own 4 KiB buffer, as net/http pools its
+// bufio.Writers. xml.NewEncoder makes its writer with bufio.NewWriter, which
+// returns a *bufio.Writer of the default size as it is, so it reuses these.
+// The buffer never grows, and the writer never reaches consumer code:
+// extension values are encoded by encoding/json, not through the XML encoder.
+var xmlWriters = sync.Pool{
+	New: func() any { return bufio.NewWriter(nil) },
+}
+
 // marshalXML encodes p as a complete XML document, with the XML declaration.
 func marshalXML(p *Problem) ([]byte, error) {
 	var buf bytes.Buffer
 
-	buf.WriteString(xml.Header)
+	// Reset discards whatever an earlier document that failed or panicked
+	// left buffered, so documents never share output.
+	w, _ := xmlWriters.Get().(*bufio.Writer)
+	w.Reset(&buf)
 
-	if err := xml.NewEncoder(&buf).Encode(p); err != nil {
+	defer func() {
+		// Release buf, so that a pooled writer does not keep the last
+		// document alive.
+		w.Reset(nil)
+		xmlWriters.Put(w)
+	}()
+
+	// The declaration goes through w too, so that a document smaller than
+	// w's buffer reaches buf in one write. Writing to a bytes.Buffer cannot
+	// fail, and Encode's flush would report it if it did.
+	_, _ = w.WriteString(xml.Header)
+
+	if err := xml.NewEncoder(w).Encode(p); err != nil {
 		return nil, err
 	}
 

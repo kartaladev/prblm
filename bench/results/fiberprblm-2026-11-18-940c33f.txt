@@ -1,0 +1,76 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/fiberprblm
+cpu: Apple M4 Pro
+BenchmarkErrorHandler/baseline-14         	 6353618	       169.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7231730	       166.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7346113	       163.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7330377	       164.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7137422	       168.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7241697	       166.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7276411	       165.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7369659	       166.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 7190743	       170.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/baseline-14         	 6965988	       167.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  634729	      1794 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  672264	      1796 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  687846	      1818 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  657794	      1786 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  688989	      1834 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  676484	      1804 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  648010	      1839 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  666619	      1801 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  658100	      1785 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/mapped-json-14      	  650042	      1825 ns/op	    1698 B/op	      28 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  641763	      1869 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  640405	      1872 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  648106	      1892 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  641200	      1893 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  646297	      1868 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  641576	      1878 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  643629	      1873 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  637986	      1884 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  623358	      1865 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/fallback-500-14     	  649984	      1884 ns/op	    1634 B/op	      27 allocs/op
+BenchmarkErrorHandler/xml-14              	  292892	      4067 ns/op	    9232 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  296107	      4130 ns/op	    9232 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  295609	      4078 ns/op	    9230 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  299544	      4080 ns/op	    9231 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  294951	      4080 ns/op	    9230 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  292927	      4071 ns/op	    9230 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  296083	      4075 ns/op	    9231 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  300205	      4101 ns/op	    9231 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  297762	      4097 ns/op	    9231 B/op	      88 allocs/op
+BenchmarkErrorHandler/xml-14              	  289828	      4138 ns/op	    9230 B/op	      88 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  629014	      1933 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  634911	      1889 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  633427	      1892 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  636117	      1893 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  619243	      1893 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  642178	      1879 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  643630	      1884 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  635562	      1942 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  634776	      1910 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/resolved-type-14    	  627601	      1896 ns/op	    1942 B/op	      29 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1209 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1212 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1205 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1199 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1201 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1204 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1205 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1208 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1191 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-200-14    	 1000000	      1197 ns/op	     224 B/op	      11 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1369700	       874.2 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1380264	       869.2 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1381148	       870.1 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1382224	       867.7 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1384819	       872.1 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1363784	       876.4 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1404368	       855.2 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1380766	       867.5 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1376216	       872.6 ns/op	     176 B/op	       8 allocs/op
+BenchmarkErrorHandler/discovery-304-14    	 1371674	       876.6 ns/op	     176 B/op	       8 allocs/op
+PASS
+ok  	github.com/kartaladev/prblm/fiberprblm	84.492s

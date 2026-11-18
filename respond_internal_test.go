@@ -19,3 +19,32 @@ func TestFallbackBody_MatchesResolvedFallback(t *testing.T) {
 		t.Errorf("fallbackBody = %s, want %s", fallbackBody, encoded)
 	}
 }
+
+func BenchmarkNegotiate(b *testing.B) {
+	cases := []struct {
+		name   string
+		accept string
+		want   string
+	}{
+		{name: "empty", accept: "", want: mediaTypeJSON},
+		{name: "any", accept: "*/*", want: mediaTypeJSON},
+		{name: "json", accept: "application/json", want: mediaTypeJSON},
+		{name: "browser", accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", want: mediaTypeXML},
+		{name: "xml", accept: mediaTypeXML, want: mediaTypeXML},
+		{name: "malformed", accept: ";;;", want: mediaTypeJSON},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			if got := negotiateFormat(tc.accept).mediaType; got != tc.want {
+				b.Fatalf("negotiateFormat(%q) = %q, want %q", tc.accept, got, tc.want)
+			}
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				negotiateFormat(tc.accept)
+			}
+		})
+	}
+}

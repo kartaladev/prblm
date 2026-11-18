@@ -758,6 +758,110 @@ h := prblm.NewHandler(prblm.WithMappers(
 | validatormap | message | `failed validation: <tag>` | `validatormap.WithTranslator` |
 | validatormap | location | `field`, never both `field` and `pointer` in one problem | `validatormap.WithJSONNames()`, with `validatormap.JSONName` registered, for `pointer` |
 
+## Performance
+
+What prblm costs on the request path is measured per adapter, next to a `baseline` handler that
+answers the same request without prblm, so the difference between the two rows is prblm's
+overhead. The cases, the commands and the measurement protocol are in
+[BENCHMARKS.md](BENCHMARKS.md), and every table comes from a raw result file committed in
+`bench/results/`. Each table names the machine, OS, Go version, module versions and commit it
+was measured on, so compare overhead, not absolute times.
+
+Much of a request's time is not prblm's. CPU profiles of these benchmarks (BENCHMARKS.md,
+"Profile findings") spend most samples in the Go runtime and the framework: `ServeMux` route
+matching and header-key canonicalization for net/http, the handler chain for gin, and fasthttp's
+header-key normalization and URI parsing for fiber. Only functions in this repository are
+optimized here.
+
+### net/http
+
+`BenchmarkWrap` (`bench_test.go`): a `ServeMux`, a handler returning an error through
+`Handler.Wrap`, wrapped in `Handler.Recover` as the gin and fiber benchmarks install their
+`Recovery`, and the problem response. The `baseline` row is a handler answering without prblm.
+
+Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `91d888b`, 2026-11-18. Raw file:
+`bench/results/core-2026-11-18-91d888b.txt`.
+
+| Case | time/op | B/op | allocs/op |
+|---|---|---|---|
+| `baseline` | 109.5 ns ± 1% | 32 B | 2 |
+| `mapped-json` | 1.169 µs ± 0% | 1.649 KiB | 25 |
+| `fallback-500` | 1.271 µs ± 1% | 1.587 KiB | 24 |
+| `xml` | 1.473 µs ± 3% | 2.175 KiB | 38 |
+| `resolved-type` | 1.288 µs ± 2% | 1.887 KiB | 26 |
+| `discovery-200` | 613.5 ns ± 1% | 176 B | 9 |
+| `discovery-304` | 565.4 ns ± 0% | 128 B | 6 |
+
+The core's hot paths on their own (`BenchmarkResolve`, `BenchmarkRespond`, `BenchmarkNegotiate`,
+`BenchmarkResolveType`, `BenchmarkIsSubtype`), from the same run:
+
+| Benchmark | time/op | B/op | allocs/op |
+|---|---|---|---|
+| `Resolve/mapped` | 169.0 ns ± 1% | 576 B | 5 |
+| `Resolve/fallback` | 263.5 ns ± 1% | 464 B | 4 |
+| `Respond/json` | 901.8 ns ± 2% | 1.548 KiB | 19 |
+| `Respond/xml` | 1.176 µs ± 0% | 2.073 KiB | 32 |
+| `Negotiate/empty` | 78.37 ns ± 2% | 0 B | 0 |
+| `Negotiate/any` | 77.98 ns ± 1% | 0 B | 0 |
+| `Negotiate/json` | 105.0 ns ± 2% | 0 B | 0 |
+| `Negotiate/browser` | 298.3 ns ± 1% | 0 B | 0 |
+| `Negotiate/xml` | 119.3 ns ± 1% | 0 B | 0 |
+| `Negotiate/malformed` | 58.58 ns ± 0% | 0 B | 0 |
+| `ResolveType/resolved` | 9.682 ns ± 1% | 0 B | 0 |
+| `ResolveType/kept` | 4.171 ns ± 2% | 0 B | 0 |
+| `ResolveType/invalid` | 142.7 ns ± 1% | 112 B | 3 |
+| `ResolveType/undocumented` | 167.6 ns ± 2% | 128 B | 3 |
+| `IsSubtype` | 17.39 ns ± 1% | 0 B | 0 |
+
+### gin
+
+`BenchmarkMiddleware` (`ginprblm/bench_test.go`): a `gin.Engine` with `Recovery` and `Middleware`
+installed with `engine.Use`, a route recording an error with `c.Error`, and the problem response.
+The `baseline` row is a route answering with `c.Data`, without prblm.
+
+Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. prblm v0.1.0,
+gin v1.12.0. Raw file: `bench/results/ginprblm-2026-11-18-940c33f.txt`.
+
+| Case | time/op | B/op | allocs/op |
+|---|---|---|---|
+| `baseline` | 138.9 ns ± 1% | 80 B | 3 |
+| `mapped-json` | 1.373 µs ± 1% | 1.697 KiB | 29 |
+| `fallback-500` | 1.459 µs ± 1% | 1.635 KiB | 28 |
+| `xml` | 3.811 µs ± 0% | 9.018 KiB | 87 |
+| `resolved-type` | 1.486 µs ± 0% | 1.936 KiB | 30 |
+| `discovery-200` | 465.3 ns ± 1% | 96 B | 6 |
+| `discovery-304` | 421.9 ns ± 0% | 48 B | 3 |
+
+Measured with `GOWORK=off`, so against the released core in the module's `go.mod`, v0.1.0. The core
+optimizations in [BENCHMARKS.md](BENCHMARKS.md#what-was-done-with-each-candidate) reach this adapter
+with the next core release: measured against the repository's core, its `xml` case went from 3.829
+µs to 1.652 µs (about 57% faster). These rows are measured again after that release.
+
+### fiber
+
+`BenchmarkErrorHandler` (`fiberprblm/bench_test.go`): a fiber app with `ErrorHandler` and
+`Recovery`, a route returning an error, and the problem response, driven through the app's
+fasthttp handler without a network round trip. The `baseline` row is a route answering with
+`c.Send`, without prblm.
+
+Apple M4 Pro, macOS 26.6.2 (darwin/arm64), Go 1.27.4, commit `940c33f`, 2026-11-18. prblm v0.1.0,
+fiber v3.7.0, fasthttp v1.78.0. Raw file: `bench/results/fiberprblm-2026-11-18-940c33f.txt`.
+
+| Case | time/op | B/op | allocs/op |
+|---|---|---|---|
+| `baseline` | 166.4 ns ± 2% | 0 B | 0 |
+| `mapped-json` | 1.803 µs ± 2% | 1.658 KiB | 28 |
+| `fallback-500` | 1.876 µs ± 1% | 1.596 KiB | 27 |
+| `xml` | 4.080 µs ± 1% | 9.015 KiB | 88 |
+| `resolved-type` | 1.893 µs ± 2% | 1.896 KiB | 29 |
+| `discovery-200` | 1.205 µs ± 1% | 224 B | 11 |
+| `discovery-304` | 871.1 ns ± 1% | 176 B | 8 |
+
+Measured with `GOWORK=off`, so against the released core in the module's `go.mod`, v0.1.0. The core
+optimizations in [BENCHMARKS.md](BENCHMARKS.md#what-was-done-with-each-candidate) reach this adapter
+with the next core release: measured against the repository's core, its `xml` case went from 4.064
+µs to 2.094 µs (about 48% faster). These rows are measured again after that release.
+
 ## Defaults
 
 | Behavior | Default | Why | Change it with |

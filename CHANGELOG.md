@@ -37,6 +37,13 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
   `p` is a `*prblm.Problem`, no longer matches: a `*Received` doesn't unwrap to its problem. Use
   `r *prblm.Received` as the target, then read `r.Problem`.
 
+### Changed
+
+- Problem responses are cheaper, with the same output bytes. An XML problem takes 38 allocations
+  and about 2.2 KiB instead of 86 and 9 KiB, and is about 57% faster on the net/http request path;
+  every problem response makes 3 fewer allocations and is 3% to 8% faster. The benchmarks, the
+  measurement protocol and the comparisons are in [BENCHMARKS.md](BENCHMARKS.md).
+
 ### Fixed
 
 - Received problems no longer leak (#8). A problem from `Parse` in an error chain, even inside an

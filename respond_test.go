@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/kartaladev/prblm"
@@ -332,6 +334,85 @@ func TestRespond_XML(t *testing.T) {
 	}
 }
 
+// XML documents encoded one after another, or concurrently, never share
+// output: a document that failed or panicked halfway, or that outgrew the
+// encoder's 4 KiB buffer, leaves nothing in the next one.
+func TestRespond_XMLIsolated(t *testing.T) {
+	t.Parallel()
+
+	const (
+		xmlHead  = `<?xml version="1.0" encoding="UTF-8"?>` + "\n"
+		requests = 64
+	)
+
+	type outcome struct {
+		problem *prblm.Problem
+		body    string
+	}
+
+	outcomes := make([]outcome, requests)
+	for i := range outcomes {
+		p := prblm.New(http.StatusConflict)
+		p.Detail = fmt.Sprintf("request %d %s", i, strings.Repeat("x", i%3*3000))
+
+		body := xmlHead + `<problem xmlns="urn:ietf:rfc:7807"><title>Conflict</title><status>409</status>` +
+			`<detail>` + p.Detail + `</detail><instance>/v1/vessels/7</instance></problem>`
+
+		switch i % 4 {
+		case 1: // fails after the members were written
+			if err := p.Set("meta", map[string]int{"file.name": 1}); err != nil {
+				t.Fatal(err)
+			}
+
+			body = `{"title":"Internal Server Error","status":500}`
+		case 2: // panics after the members were written
+			if err := p.Set("meta", panickyValue{}); err != nil {
+				t.Fatal(err)
+			}
+
+			body = `{"title":"Internal Server Error","status":500}`
+		}
+
+		outcomes[i] = outcome{problem: p, body: body}
+	}
+
+	respond := func(t *testing.T, o outcome) {
+		t.Helper()
+
+		req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7", Accept: problemXMLType}
+
+		res, ok := mapping(o.problem).Respond(t.Context(), req, errVesselNotFound)
+		if !ok {
+			t.Error("Respond() reported nothing to write")
+
+			return
+		}
+
+		if string(res.Body) != o.body {
+			t.Errorf("body = %.200s\nwant   %.200s", res.Body, o.body)
+		}
+	}
+
+	t.Run("sequential", func(t *testing.T) {
+		t.Parallel()
+
+		for _, o := range outcomes {
+			respond(t, o)
+		}
+	})
+
+	t.Run("concurrent", func(t *testing.T) {
+		t.Parallel()
+
+		var wg sync.WaitGroup
+		for _, o := range outcomes {
+			wg.Go(func() { respond(t, o) })
+		}
+
+		wg.Wait()
+	})
+}
+
 // panickyValue is an extension value whose JSON encoding panics.
 type panickyValue struct{}
 
@@ -478,37 +559,6 @@ func TestRespond_Canceled(t *testing.T) {
 	}
 }
 
-// benchmarkRespond measures Respond for a mapped error with the given Accept.
-func benchmarkRespond(b *testing.B, accept string) {
-	b.Helper()
-
-	h := prblm.NewHandler(prblm.WithMappers(prblm.Status(errVesselNotFound, http.StatusNotFound)))
-	req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7", Accept: accept}
-	ctx := context.Background()
-
-	b.ReportAllocs()
-
-	for b.Loop() {
-		if _, ok := h.Respond(ctx, req, errVesselNotFound); !ok {
-			b.Fatal("nothing to write")
-		}
-	}
-}
-
-func BenchmarkRespond_JSON(b *testing.B) {
-	for _, accept := range []string{"", "*/*", "application/json"} {
-		b.Run("accept="+accept, func(b *testing.B) { benchmarkRespond(b, accept) })
-	}
-}
-
-func BenchmarkRespond_XML(b *testing.B) {
-	// A browser's default Accept prefers application/xml (q=0.9) over */*
-	// (q=0.8), so it gets XML.
-	for _, accept := range []string{"application/xml", "application/problem+xml", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"} {
-		b.Run("accept="+accept, func(b *testing.B) { benchmarkRespond(b, accept) })
-	}
-}
-
 // problem-response / Scenario: Headers on the response, as adapters merge
 // them into a framework's header (design D2 of add-framework-adapters).
 func TestResponse_MergeInto(t *testing.T) {
@@ -579,6 +629,84 @@ func TestResponse_MergeInto_NilDestination(t *testing.T) {
 
 	// Nothing to merge into: it must not panic.
 	res.MergeInto(nil)
+}
+
+// Each merged header's values stand alone: appending to one never changes
+// another, nor the response's own header, whatever storage the merge used.
+func TestResponse_MergeInto_ValuesIndependent(t *testing.T) {
+	t.Parallel()
+
+	// Values with spare capacity, so a merge that kept the response's slices
+	// would let an append write into them.
+	withRoom := func(values ...string) []string { return append(make([]string, 0, 8), values...) }
+
+	res := prblm.Response{Header: http.Header{
+		"X-A":           withRoom("a1"),
+		"X-B":           withRoom("b1", "b2"),
+		"X-C":           withRoom("c1"),
+		"Cache-Control": withRoom("no-store"),
+	}}
+	before := res.Header.Clone()
+	dst := http.Header{}
+
+	res.MergeInto(dst)
+
+	for name := range res.Header {
+		dst[name] = append(dst[name], "added")
+	}
+
+	for name, values := range before {
+		if want := append(slices.Clone(values), "added"); !slices.Equal(dst[name], want) {
+			t.Errorf("%s = %q after appending to every header, want %q", name, dst[name], want)
+		}
+
+		if got := res.Header[name][:cap(res.Header[name])][len(values)]; got != "" {
+			t.Errorf("response header %s gained %q in its spare capacity after appending to the merged one", name, got)
+		}
+	}
+}
+
+// A header the response holds without values is merged as it is: present,
+// with nil values, and an empty list stays empty.
+func TestResponse_MergeInto_NoValues(t *testing.T) {
+	t.Parallel()
+
+	res := prblm.Response{Header: http.Header{"X-Nil": nil, "X-Empty": {}}}
+	dst := http.Header{"X-Nil": {"old"}, "X-Empty": {"old"}}
+
+	res.MergeInto(dst)
+
+	if values, ok := dst["X-Nil"]; !ok || values != nil {
+		t.Errorf("X-Nil = %q (present %v), want present with nil values", values, ok)
+	}
+
+	if values, ok := dst["X-Empty"]; !ok || values == nil || len(values) != 0 {
+		t.Errorf("X-Empty = %#v (present %v), want present and empty", values, ok)
+	}
+}
+
+// The headers of a response stand alone the same way.
+func TestRespond_HeaderValuesIndependent(t *testing.T) {
+	t.Parallel()
+
+	req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7"}
+
+	res, ok := mapping(prblm.New(http.StatusNotFound)).Respond(t.Context(), req, errVesselNotFound)
+	if !ok {
+		t.Fatal("Respond() reported nothing to write")
+	}
+
+	before := res.Header.Clone()
+
+	for name := range res.Header {
+		res.Header[name] = append(res.Header[name], "added")
+	}
+
+	for name, values := range before {
+		if want := append(slices.Clone(values), "added"); !slices.Equal(res.Header[name], want) {
+			t.Errorf("%s = %q after appending to every header, want %q", name, res.Header[name], want)
+		}
+	}
 }
 
 func TestResponse_MergeInto_NoAliasing(t *testing.T) {
