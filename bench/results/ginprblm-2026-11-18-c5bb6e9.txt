@@ -1,0 +1,76 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/adapters/ginprblm
+cpu: Apple M4 Pro
+BenchmarkMiddleware/baseline-14         	 8843643	       134.4 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 9174471	       131.5 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 8899350	       133.4 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 9011632	       132.5 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 9034854	       134.7 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 9147552	       133.0 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 8821671	       135.0 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 8879079	       132.3 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 8965984	       137.1 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/baseline-14         	 8737354	       134.7 ns/op	      80 B/op	       3 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  957583	      1266 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  982699	      1251 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  940015	      1266 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  963100	      1260 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  974035	      1269 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  963451	      1250 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  975754	      1265 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  963152	      1268 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  975130	      1279 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/mapped-json-14      	  957506	      1285 ns/op	    1738 B/op	      26 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  902863	      1350 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  864031	      1362 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  909532	      1349 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  898132	      1345 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  900912	      1360 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  893652	      1365 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  885703	      1350 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  898726	      1352 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  870136	      1357 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/fallback-500-14     	  890121	      1363 ns/op	    1674 B/op	      25 allocs/op
+BenchmarkMiddleware/xml-14              	  774541	      1576 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  750787	      1588 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  777289	      1566 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  744627	      1577 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  770013	      1577 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  769486	      1591 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  765300	      1586 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  780656	      1570 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  774014	      1578 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/xml-14              	  764547	      1583 ns/op	    2278 B/op	      39 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  808296	      1390 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  871892	      1382 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  877389	      1386 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  849001	      1395 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  879380	      1388 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  863604	      1391 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  873362	      1417 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  847948	      1404 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  876332	      1390 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/resolved-type-14    	  888457	      1397 ns/op	    1982 B/op	      27 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2578585	       466.1 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2551226	       469.8 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2533215	       474.3 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2547930	       469.7 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2572494	       467.0 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2582527	       466.5 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2561835	       466.7 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2572365	       467.5 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2564868	       467.7 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-200-14    	 2565885	       468.3 ns/op	      96 B/op	       6 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2843254	       423.0 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2840755	       421.9 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2848627	       424.0 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2829110	       422.4 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2822022	       424.0 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2834596	       421.9 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2834677	       422.2 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2833531	       423.7 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2844706	       421.6 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddleware/discovery-304-14    	 2831235	       424.3 ns/op	      48 B/op	       3 allocs/op
+PASS
+ok  	github.com/kartaladev/prblm/adapters/ginprblm	85.054s
