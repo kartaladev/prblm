@@ -59,10 +59,12 @@ Tasks marked **(idle machine)** produce timings. Run them only when the machine 
 ## 5. Slice: profile-driven optimizations
 
 - [ ] 5.1 **(idle machine)** Take CPU and memory profiles for each adapter's request-path benchmark (design D5, `-benchtime 5s`), and list every candidate meeting the design D6 thresholds in a "Profile findings" table in BENCHMARKS.md (function, module, flat CPU %, alloc_space %); verify every listed function is in this repository
+  - Progress: the memory profiles and the allocation shares are done (BENCHMARKS.md "Profile findings", commit `15e98f2`); the flat CPU % column waits for the idle machine
 - [ ] 5.2 For each candidate in 5.1, apply the design D6 policy: a separate structural commit when needed, then the optimization; verify the full suites (including `internal/paritytest`) pass with `-race` and `GOWORK=off`, and `go tool cover -func` still covers the function
   - RED: record the **(idle machine)** `benchstat` baseline (old) for the affected cases, and confirm the touched function's tests cover it. If coverage is missing, add a characterization test first.
   - GREEN: the minimal change. Keep it only if `benchstat` (old against new, `-count 10`, idle machine) shows p < 0.05 improvement in time/op or allocs/op on a request-path case and no significant regression elsewhere. Otherwise revert and record "examined, not changed" with the reason.
   - REFACTOR: confirm readability did not suffer for the gain (the refactoring rules), then /simplify
+  - Progress: `xmlenc.decodeTree` (`60d4b7c`) and `marshalXML` (`8359978`) optimized and verified on allocs/op; their time/op `benchstat` (idle machine) is still needed to keep them. `Problem.MarshalJSON` deferred (Go 1.27 `nojsonv2`), `setExt` examined, `newResponse` open (BENCHMARKS.md "What was done with each candidate")
 - [ ] 5.3 Record each kept optimization's `benchstat` comparison in BENCHMARKS.md; verify each entry names its commit and the comparison command
 - [ ] 5.4 Verify slice 5 end to end: suites, lint, `GOWORK=off` and smoke runs clean in every module, the parity test green, and hot-path coverage unchanged or better
 
