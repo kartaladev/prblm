@@ -30,12 +30,14 @@ func marshalXML(p *Problem) ([]byte, error) {
 
 	buf.WriteString(xml.Header)
 
+	// Reset discards whatever an earlier document that failed or panicked
+	// left buffered, so documents never share output.
 	w, _ := xmlWriters.Get().(*bufio.Writer)
 	w.Reset(&buf)
 
 	defer func() {
-		// Drop what a failed document left buffered, and the reference to
-		// buf, before another document uses the writer.
+		// Release buf, so that a pooled writer does not keep the last
+		// document alive.
 		w.Reset(nil)
 		xmlWriters.Put(w)
 	}()

@@ -632,16 +632,21 @@ func TestResponse_MergeInto_NilDestination(t *testing.T) {
 }
 
 // Each merged header's values stand alone: appending to one never changes
-// another, whatever storage the merge used.
+// another, nor the response's own header, whatever storage the merge used.
 func TestResponse_MergeInto_ValuesIndependent(t *testing.T) {
 	t.Parallel()
 
+	// Values with spare capacity, so a merge that kept the response's slices
+	// would let an append write into them.
+	withRoom := func(values ...string) []string { return append(make([]string, 0, 8), values...) }
+
 	res := prblm.Response{Header: http.Header{
-		"X-A":           {"a1"},
-		"X-B":           {"b1", "b2"},
-		"X-C":           {"c1"},
-		"Cache-Control": {"no-store"},
+		"X-A":           withRoom("a1"),
+		"X-B":           withRoom("b1", "b2"),
+		"X-C":           withRoom("c1"),
+		"Cache-Control": withRoom("no-store"),
 	}}
+	before := res.Header.Clone()
 	dst := http.Header{}
 
 	res.MergeInto(dst)
@@ -650,9 +655,13 @@ func TestResponse_MergeInto_ValuesIndependent(t *testing.T) {
 		dst[name] = append(dst[name], "added")
 	}
 
-	for name, values := range res.Header {
+	for name, values := range before {
 		if want := append(slices.Clone(values), "added"); !slices.Equal(dst[name], want) {
 			t.Errorf("%s = %q after appending to every header, want %q", name, dst[name], want)
+		}
+
+		if got := res.Header[name][:cap(res.Header[name])][len(values)]; got != "" {
+			t.Errorf("response header %s gained %q in its spare capacity after appending to the merged one", name, got)
 		}
 	}
 }
