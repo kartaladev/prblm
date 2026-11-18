@@ -144,12 +144,21 @@ func negotiateFormat(accept string) *format {
 func newResponse(status int, header http.Header, mediaType string, body []byte) Response {
 	header = canonicalize(header)
 
-	header.Set("Content-Type", mediaType)
-	header.Set("Content-Length", strconv.Itoa(len(body)))
-	addVary(header, "Accept")
+	// The values share one array instead of one per header, as net/http
+	// does when it parses headers. Each is capped at its length, so an
+	// append to one copies it rather than overwriting the next.
+	values := [...]string{mediaType, strconv.Itoa(len(body)), "no-store", "Accept"}
+	header["Content-Type"] = values[0:1:1]
+	header["Content-Length"] = values[1:2:2]
+
+	if len(header["Vary"]) == 0 {
+		header["Vary"] = values[3:4:4]
+	} else {
+		addVary(header, "Accept")
+	}
 
 	if len(header.Values("Cache-Control")) == 0 {
-		header.Set("Cache-Control", "no-store")
+		header["Cache-Control"] = values[2:3:3]
 	}
 
 	return Response{Status: status, Header: header, Body: body}
