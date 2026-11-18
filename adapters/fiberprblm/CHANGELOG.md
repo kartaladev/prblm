@@ -9,6 +9,8 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/f
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
 ### Changed (BREAKING)
 
 - The module moved to `github.com/kartaladev/prblm/adapters/fiberprblm`. Change the import path;
@@ -24,7 +26,10 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/f
 
 ### Changed
 
+- Requires `github.com/kartaladev/prblm` v0.2.0, so the hooks can be added with `prblm.AddErrorHook`
+  and problem responses are cheaper (see the root CHANGELOG.md).
 - `github.com/valyala/fasthttp` is a direct requirement, at the version fiber already required; no
   new module enters the graph.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/fiberprblm/v0.1.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/fiberprblm/v0.2.0...HEAD
+[0.2.0]: https://github.com/kartaladev/prblm/compare/fiberprblm/v0.1.0...adapters/fiberprblm/v0.2.0

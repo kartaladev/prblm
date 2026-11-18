@@ -9,6 +9,8 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-18
+
 ### Changed (BREAKING)
 
 - The module moved to `github.com/kartaladev/prblm/adapters/ginprblm`. Change the import path; the
@@ -22,6 +24,11 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
   import "github.com/kartaladev/prblm/adapters/ginprblm"
   ```
 
+### Changed
+
+- Requires `github.com/kartaladev/prblm` v0.2.0, so the hooks can be added with `prblm.AddErrorHook`
+  and problem responses are cheaper (see the root CHANGELOG.md).
+
 ### Added
 
 - `ErrStatusOnly`, the error the hooks receive for a status-only abort such as
@@ -30,4 +37,5 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
   gin's own answers to an unrouted request (the 404 for a path no route claims, and the 405 for a
   wrong method with `HandleMethodNotAllowed`) match it too, though no handler ran.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/ginprblm/v0.1.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.0...HEAD
+[0.2.0]: https://github.com/kartaladev/prblm/compare/ginprblm/v0.1.0...adapters/ginprblm/v0.2.0

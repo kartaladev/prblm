@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/gin-gonic/gin v1.12.0
-	github.com/kartaladev/prblm v0.1.0
+	github.com/kartaladev/prblm v0.2.0
 )
 
 require (
