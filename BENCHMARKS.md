@@ -157,3 +157,66 @@ benchstat bench/results/core-<old>.txt bench/results/core-<new>.txt
 
 A change is an improvement only when `benchstat` reports it as significant (p < 0.05); a `~`
 means no measurable difference.
+
+## Profiles
+
+Profiles show where a request's time and memory go, so optimizations target measured costs.
+They are taken per adapter from the request-path benchmark, over all its cases, and are not
+committed: they are binary and specific to one machine.
+
+### Memory profiles
+
+Allocation counts do not depend on machine load, so memory profiles can be taken at any time.
+`-memprofilerate 1` records every allocation instead of a sample. From the repository root, into a
+scratch directory `$PROF`:
+
+```sh
+go test -run '^$' -bench BenchmarkWrap -benchtime 5s -memprofilerate 1 \
+  -memprofile "$PROF/core.mem" -o "$PROF/core.test" .
+(cd ginprblm && go test -run '^$' -bench BenchmarkMiddleware -benchtime 5s -memprofilerate 1 \
+  -memprofile "$PROF/gin.mem" -o "$PROF/gin.test" .)
+(cd fiberprblm && go test -run '^$' -bench BenchmarkErrorHandler -benchtime 5s -memprofilerate 1 \
+  -memprofile "$PROF/fiber.mem" -o "$PROF/fiber.test" .)
+```
+
+They run in workspace mode, so the adapters use the core in the repository, the code an
+optimization changes. Only functions in this repository can be changed, so every allocation is
+counted against the deepest function of this repository on its stack, including the allocations the
+standard library or a framework makes on its behalf:
+
+```sh
+go tool pprof -sample_index alloc_space -show '^github\.com/kartaladev/prblm' -top \
+  "$PROF/core.test" "$PROF/core.mem"
+```
+
+`-sample_index alloc_objects` gives the allocation counts, and `-list <function>` shows them per
+line. To profile one case, narrow the filter, for example `-bench 'BenchmarkWrap/xml$'`.
+
+### CPU profiles
+
+CPU profiles need an idle machine (see "Measurement protocol"). They use the same commands with
+`-cpuprofile "$PROF/<module>.cpu"` in place of the memory flags, and are read with
+`go tool pprof -top`.
+
+### Profile findings
+
+A function is a candidate for optimization when it has at least 5% flat CPU or at least 10% of
+`alloc_space` in a request-path profile. The table lists every candidate, all of them in this
+repository. Allocation shares are counted as described under "Memory profiles", for net/http, gin
+and fiber in that order. The benchmarks' own frames (the request and the discarding writer they
+build) are left out: they are not prblm code.
+
+Memory profiles: 2026-11-18, commit `68ef42b`, Go 1.27, darwin/arm64, Apple M4 Pro. CPU profiles
+are pending an idle machine.
+
+| Function | Module | Flat CPU % | `alloc_space` % | What allocates |
+|---|---|---|---|---|
+| `Problem.MarshalJSON` | core | pending | 16.0 · 15.3 · 17.3 | Two `json.Marshal` calls (standard members, then extensions) and the join of their outputs: 9 of the 28 allocations of `mapped-json`. |
+| `marshalXML` | core | pending | 13.8 · 13.6 · 14.0 | `xml.NewEncoder` makes a 4 KB `bufio.Writer` for every document: 52% of the bytes of the `xml` case. |
+| `newResponse` | core | pending | 13.4 · 12.8 · 14.4 | Every `Header.Set` and `Add` makes a one-element slice: 6 allocations per problem response. |
+| `(*Problem).setExt` | core | pending | 11.2 · 10.7 · 12.0 | The extension map, made when the `trace_id` enricher adds the request's first extension. |
+| `xmlenc.decodeTree` | core | pending | 7.5 · 7.4 · 7.6; `xml` case: 28.1 | Every member goes through `json.Marshal` and back, plain strings included: 32 of the 86 allocations of the `xml` case. Listed from the `xml` case's own profile. |
+
+Below the threshold, `Response.MergeInto` makes about 8% of the bytes but 18% to 26% of the
+allocations: it copies every header value of the problem response into the response writer's
+header.
