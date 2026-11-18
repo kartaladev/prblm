@@ -63,6 +63,11 @@ func TestEncode(t *testing.T) {
 		{name: "null inside an array", ext: "items", value: []any{nil, "x"}, expected: `<items><i></i><i>x</i></items>`},
 		{name: "character not allowed in XML", ext: "text", value: "a\x00b", expected: "<text>a�b</text>"},
 		{name: "html-sensitive text not mangled", ext: "text", value: "<script>", expected: `<text>&lt;script&gt;</text>`},
+		{name: "invalid UTF-8 byte replaced", ext: "text", value: "a\xffb", expected: "<text>a�b</text>"},
+		{name: "each invalid UTF-8 byte replaced", ext: "text", value: "\xff\xfe", expected: "<text>��</text>"},
+		{name: "truncated UTF-8 sequence replaced", ext: "text", value: "a\xe2\x82", expected: "<text>a��</text>"},
+		{name: "invalid UTF-8 in an array", ext: "items", value: []string{"\xff"}, expected: "<items><i>�</i></items>"},
+		{name: "empty text", ext: "text", value: "", expected: `<text></text>`},
 	}
 
 	for _, tt := range tests {
@@ -163,6 +168,38 @@ func TestEncode_InvalidName(t *testing.T) {
 				t.Errorf("Encode() = %s, %v; want an error wrapping ErrInvalidName", got, err)
 			}
 		})
+	}
+}
+
+// A string value is written without the JSON round trip, and its element
+// name is still checked.
+func TestEncode_StringInvalidName(t *testing.T) {
+	t.Parallel()
+
+	if got, err := encode("a b", "text"); !errors.Is(err, xmlenc.ErrInvalidName) {
+		t.Errorf("Encode() = %s, %v; want an error wrapping ErrInvalidName", got, err)
+	}
+}
+
+// upper is a string type whose JSON encoding differs from its value.
+type upper string
+
+func (u upper) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strings.ToUpper(string(u)))
+}
+
+// A named string type still goes through encoding/json, so its MarshalJSON
+// applies.
+func TestEncode_NamedStringType(t *testing.T) {
+	t.Parallel()
+
+	got, err := encode("code", upper("x1"))
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+
+	if expected := `<code>X1</code>`; got != expected {
+		t.Errorf("Encode() = %s, want %s", got, expected)
 	}
 }
 

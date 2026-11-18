@@ -31,6 +31,14 @@ var ErrInvalidName = errors.New("xmlenc: invalid element name")
 // On error, e may hold part of the element, so the caller must discard what
 // was written.
 func Encode(e *xml.Encoder, name string, value any) error {
+	// A string is written directly: the XML is the same as after the JSON
+	// round trip, because the XML encoder replaces each invalid UTF-8 byte
+	// with U+FFFD as encoding/json does. The round trip it skips made about
+	// half the allocations of an XML problem, whose members are strings.
+	if s, ok := value.(string); ok {
+		return walk(e, name, s)
+	}
+
 	var tree any
 
 	b, err := json.Marshal(value)
