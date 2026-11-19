@@ -10,6 +10,8 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-19
+
 ### Fixed
 
 - A panic in the error's own methods no longer escapes the handler. An error whose `As` method
@@ -138,6 +140,7 @@ The first release.
   problem, each with a fixed, generic detail. `sql.ErrTxDone` and other errors are left to later
   mappers. `WithNotFound` and `WithUnavailable` replace either problem.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/kartaladev/prblm/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/kartaladev/prblm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kartaladev/prblm/releases/tag/v0.1.0

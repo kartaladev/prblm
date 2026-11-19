@@ -9,6 +9,8 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-19
+
 ### Fixed
 
 - `Recovery` answers a panic whose value is an error with a panicking `Is` method. Its broken
@@ -45,5 +47,6 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
   gin's own answers to an unrouted request (the 404 for a path no route claims, and the 405 for a
   wrong method with `HandleMethodNotAllowed`) match it too, though no handler ran.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.1...HEAD
+[0.2.1]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.0...adapters/ginprblm/v0.2.1
 [0.2.0]: https://github.com/kartaladev/prblm/compare/ginprblm/v0.1.0...adapters/ginprblm/v0.2.0
