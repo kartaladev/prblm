@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -377,6 +378,59 @@ func BenchmarkRespond(b *testing.B) {
 
 			for b.Loop() {
 				h.Respond(ctx, req, errVesselNotFound)
+			}
+		})
+	}
+}
+
+// BenchmarkMergeInto measures merging a problem response's headers into the
+// response writer's: into an empty header, as the request-path benchmarks
+// do, and into one middleware already filled, where each key is checked for
+// a non-canonical spelling of the response's header names.
+func BenchmarkMergeInto(b *testing.B) {
+	h := prblm.NewHandler(benchOptions()...)
+	req := prblm.Request{Method: http.MethodGet, Path: benchPathVessel}
+
+	res, ok := h.Respond(b.Context(), req, errVesselNotFound)
+	if !ok {
+		b.Fatal("Respond() reported no problem")
+	}
+
+	middleware := http.Header{
+		"Access-Control-Allow-Origin": {"*"},
+		"Strict-Transport-Security":   {"max-age=63072000"},
+		"X-Content-Type-Options":      {"nosniff"},
+		"X-Request-Id":                {"r1"},
+	}
+
+	cases := []struct {
+		name   string
+		before http.Header
+	}{
+		{name: "empty"},
+		{name: "middleware", before: middleware},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			dst := make(http.Header)
+			fill := func() {
+				clear(dst)
+				maps.Copy(dst, tc.before)
+			}
+
+			fill()
+			res.MergeInto(dst)
+
+			if got := dst.Get("Content-Type"); got != problemJSONType || len(dst) != len(tc.before)+len(res.Header) {
+				b.Fatalf("MergeInto() = %v; want Content-Type %q and %d headers", dst, problemJSONType, len(tc.before)+len(res.Header))
+			}
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				fill()
+				res.MergeInto(dst)
 			}
 		})
 	}

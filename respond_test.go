@@ -648,6 +648,12 @@ func TestResponse_MergeInto(t *testing.T) {
 			expected: http.Header{"x-request-id": {"r1"}, "Content-Type": {"application/problem+json"}},
 		},
 		{
+			name:     "spelling of a long name replaced",
+			dst:      http.Header{strings.ToLower(longHeaderName): {"handler"}},
+			src:      http.Header{longHeaderName: {"problem"}},
+			expected: http.Header{longHeaderName: {"problem"}},
+		},
+		{
 			name:     "key that is no valid field name untouched",
 			dst:      http.Header{"cache control": {"max-age=5"}},
 			src:      http.Header{"Cache-Control": {"no-store"}},
@@ -1044,3 +1050,7 @@ func TestRespondPanic_PanicNil(t *testing.T) {
 	assertSafe500(t, recovered())
 	assertNilPanic(t, r.recorded())
 }
+
+// longHeaderName is a canonical header name of 73 bytes: a spelling of a
+// long name folds like any other.
+var longHeaderName = "X-" + strings.Repeat("Long-", 13) + "Header"

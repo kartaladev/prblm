@@ -79,11 +79,15 @@ func (r Response) MergeInto(dst http.Header) {
 		return
 	}
 
-	foldSpellings(dst, func(name string) bool {
-		_, ok := r.Header[name]
+	// An empty dst, as before the handler wrote any header, has nothing to
+	// fold; skipping it saves ranging over the map.
+	if len(dst) > 0 {
+		foldSpellings(dst, func(name string) bool {
+			_, ok := r.Header[name]
 
-		return ok
-	})
+			return ok
+		})
+	}
 
 	for name, values := range r.Header {
 		switch {
