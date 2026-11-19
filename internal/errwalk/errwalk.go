@@ -43,14 +43,20 @@ type Abort struct {
 // It holds no pointer into itself, so a walk that is asked one question and
 // dropped stays off the heap: the first entries are kept in buf, and only a
 // longer chain moves them to more.
+//
+// A walk the handler keeps escapes, so its size is paid on every
+// resolution: it fits the 112-byte size class, half of the 224 bytes it took
+// with the abort held by value and eight inline entries (see
+// bench/results/compare-2026-11-20-bounded-error-walk/). buf holds the
+// common chain of 1 to 4 entries, and only an aborted walk allocates its
+// Abort.
 type Walk struct {
-	// abort is why the walk stopped; its zero Reason means it did not. It
-	// is kept by value, so aborting allocates nothing.
-	abort Abort
+	// abort is why the walk stopped, or nil when it did not.
+	abort *Abort
 	// more holds every entry once the chain outgrows buf, or is nil.
 	more []error
 	// buf holds the first n entries while the chain fits in it.
-	buf [8]error
+	buf [4]error
 	n   int
 }
 
@@ -85,11 +91,7 @@ func (w *Walk) add(e error) {
 // Aborted returns why the walk aborted, or nil when it walked the whole
 // chain.
 func (w *Walk) Aborted() *Abort {
-	if w.abort.Reason == "" {
-		return nil
-	}
-
-	return &w.abort
+	return w.abort
 }
 
 // Is returns the index of the first entry that is target or reports it
@@ -344,7 +346,7 @@ func (w *Walk) flatten(err error) {
 		// Checked before any child is pushed, so a huge fan-out costs
 		// nothing, and before any child's method is called.
 		if examined+len(pending)+len(children) > Budget {
-			w.abort = Abort{Reason: ReasonBudget}
+			w.abort = &Abort{Reason: ReasonBudget}
 
 			break
 		}
@@ -385,7 +387,7 @@ func (w *Walk) unwrap(e error, one *[1]error) ([]error, bool) {
 func call[T any](w *Walk, fn func() T) (result T, ok bool) {
 	defer func() {
 		if !ok {
-			w.abort = Abort{Reason: ReasonPanic, Value: recover(), Stack: debug.Stack()}
+			w.abort = &Abort{Reason: ReasonPanic, Value: recover(), Stack: debug.Stack()}
 		}
 	}()
 

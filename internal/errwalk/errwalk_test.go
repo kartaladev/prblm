@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/kartaladev/prblm/internal/errwalk"
 )
@@ -769,6 +770,20 @@ func TestWalk_Allocs(t *testing.T) {
 				t.Errorf("%s over 4 entries without methods allocates %v times, want 0", tt.name, allocs)
 			}
 		})
+	}
+}
+
+// The handler keeps its walk across the resolution steps, so the walk
+// escapes and every resolution allocates one Walk: its size is paid on
+// every problem response. It must fit the 112-byte size class, as measured
+// against v0.2.1 (bench/results/compare-2026-11-20-bounded-error-walk/).
+func TestWalk_Size(t *testing.T) {
+	t.Parallel()
+
+	const maxSize = 112
+
+	if size := unsafe.Sizeof(errwalk.Walk{}); size > maxSize {
+		t.Errorf("unsafe.Sizeof(Walk{}) = %d bytes, want at most %d", size, maxSize)
 	}
 }
 
