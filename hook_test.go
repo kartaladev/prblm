@@ -272,13 +272,7 @@ func (emptyAsError) As(any) bool   { return true }
 func writeContained(t *testing.T, h *prblm.Handler, err error) *httptest.ResponseRecorder {
 	t.Helper()
 
-	defer func() {
-		if v := recover(); v != nil {
-			t.Fatalf("a panic escaped the handler: %v", v)
-		}
-	}()
-
-	return write(t, h, err)
+	return serveContained(t, h.Wrap(func(http.ResponseWriter, *http.Request) error { return err }))
 }
 
 // error-mapping / Scenario: Error methods panic.
@@ -338,26 +332,16 @@ func TestResolve_FaultyError(t *testing.T) {
 			}
 
 			calls := r.recorded()
-			if len(calls) < 2 {
-				t.Fatalf("hook called %d times, want panic errors and then the error: %+v", len(calls), calls)
+			assertHookCalls(t, calls, tt.err, tt.status, anyPanics)
+
+			if !tt.boom {
+				return
 			}
 
 			for _, c := range calls[:len(calls)-1] {
-				pe, ok := errors.AsType[*prblm.PanicError](c.err)
-				if !ok {
-					t.Errorf("hook call got %v, want a *prblm.PanicError", c.err)
-
-					continue
-				}
-
-				if tt.boom && pe.Value != "boom" {
+				if pe, ok := errors.AsType[*prblm.PanicError](c.err); ok && pe.Value != "boom" {
 					t.Errorf("panic value = %v, want boom", pe.Value)
 				}
-			}
-
-			//nolint:errorlint // the last call must carry the original error value itself.
-			if last := calls[len(calls)-1]; last.err != tt.err || last.status != tt.status {
-				t.Errorf("last hook call got %v with status %d, want %v with %d", last.err, last.status, tt.err, tt.status)
 			}
 		})
 	}

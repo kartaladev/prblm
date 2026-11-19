@@ -10,6 +10,20 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
+### Fixed
+
+- A panic in the error's own methods no longer escapes the handler. An error whose `As` method
+  panics, or reports a match without setting its target, used to escape `Respond` from the
+  status-hint step: through `Wrap`, net/http dropped the connection, and the hooks never heard of
+  the error. That step now counts the panic as no match, like every other step, reports it as a
+  `*PanicError`, and the request gets the safe 500 problem. An error chain that loops back on
+  itself is still not detected: resolving it never returns, or overflows the stack, as with
+  `errors.Is`.
+- `Recover` answers a panic whose value is an error with a panicking `Is` method. The broken
+  connection check used to let that second panic escape `Recover`, so the client got no response.
+  The connection now counts as working: the client gets the safe 500 problem, and the hooks receive
+  the second panic and then the original one.
+
 ## [0.2.0] - 2026-11-18
 
 ### Added

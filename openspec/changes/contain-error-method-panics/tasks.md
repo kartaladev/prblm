@@ -21,18 +21,18 @@
 
 ## 2. Slice: net/http `Recover` answers a hostile panic value
 
-- [ ] 2.1 A hostile panic value gets the safe 500, and the original panic reaches the hook (panic-recovery / Scenario: Hostile panic value); verify `go test -race -run TestRecover_HostileValue ./` passes
+- [x] 2.1 A hostile panic value gets the safe 500, and the original panic reaches the hook (panic-recovery / Scenario: Hostile panic value); verify `go test -race -run TestRecover_HostileValue ./` passes
   - RED: in `http_test.go`, write `TestRecover_HostileValue` through `httptest.NewServer` and `h.Recover(...)`, with the three Examples rows (hostile `Is`, EPIPE, `"boom"`).
     - Assertions: the status, `Content-Type` and body, or that no response was written for EPIPE; and the hook calls in order.
     - Expected failure: the hostile row gets a client `EOF`, because the panic escapes `Recover` from `isBrokenConnection`. The other two rows pass as regression rows.
   - GREEN: in `recoverPanic`, replace `isBrokenConnection(pe)` with `safeCall(ctx, h, func() bool { return isBrokenConnection(pe) })`.
   - REFACTOR: check whether `recoverPanic`'s condition now reads as a Long Expression, and Extract Variable (`broken := ...`) if so. Then `/simplify`.
-- [ ] 2.2 Without a hook, a hostile panic value still gets the 500 and the server keeps serving (panic-recovery / Scenario: Hostile panic value without a hook); verify `go test -race -run TestRecover_HostileValue_NoHook ./` passes
+- [x] 2.2 Without a hook, a hostile panic value still gets the 500 and the server keeps serving (panic-recovery / Scenario: Hostile panic value without a hook); verify `go test -race -run TestRecover_HostileValue_NoHook ./` passes
   - RED: `TestRecover_HostileValue_NoHook`: two requests in a row, both 500. On main, the first request gets `EOF`.
   - GREEN: none expected beyond 2.1.
   - REFACTOR: share the hostile panic value with slice 1's fixtures, then `/simplify`.
-- [ ] 2.3 Add a "Fixed" entry to `CHANGELOG.md` under `[Unreleased]` for slices 1 and 2. Verify by reading it against Keep a Changelog.
-- [ ] 2.4 Verify slice 2:
+- [x] 2.3 Add a "Fixed" entry to `CHANGELOG.md` under `[Unreleased]` for slices 1 and 2. Verify by reading it against Keep a Changelog.
+- [x] 2.4 Verify slice 2:
   - `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `recoverPanic` covered on its broken, not-broken and panicking branches.
   - `go vet`, `golangci-lint` and gopls `go_diagnostics` are clean on the changed files.
   - `GOWORK=off go test ./...` passes, and `internal/paritytest` passes in both modes.

@@ -534,7 +534,10 @@ func (h *Handler) recoverPanic(tw *trackingWriter, r *http.Request) {
 	req := requestOf(r)
 	ctx := withRequest(r.Context(), req)
 
-	if tw.started || isBrokenConnection(pe) {
+	// Testing for a broken connection calls the Is methods of the panic
+	// value, which may panic too; the connection then counts as working, so
+	// the panic is answered.
+	if tw.started || safeCall(ctx, h, func() bool { return isBrokenConnection(pe) }) {
 		h.report(ctx, pe, nil)
 
 		return
