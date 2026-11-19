@@ -73,9 +73,9 @@ func WithTitle(title string) Option {
 // failed tag. Without one, because fn is nil or returns nil, or because fn
 // panics, the detail is "failed validation: <tag>". The first panic, in fn
 // or in a translation, is recorded as the problem's cause (see the package
-// documentation), where the handler's OnError hook can find it. A panic
-// with [http.ErrAbortHandler] is passed on, so net/http aborts the
-// response.
+// documentation), where the handler's OnError hook can find it, panic(nil)
+// included under GODEBUG=panicnil=1, as a value of nil. A panic with
+// [http.ErrAbortHandler] is passed on, so net/http aborts the response.
 func WithTranslator(fn func(ctx context.Context) ut.Translator) Option {
 	return func(c *config) {
 		c.translator = fn
@@ -156,25 +156,44 @@ func (c *config) translatorFor(ctx context.Context, cause **prblm.PanicError) ut
 		return nil
 	}
 
-	defer recoverInto(cause)
+	trans, _ := guard(cause, func() ut.Translator { return c.translator(ctx) })
 
-	return c.translator(ctx)
+	return trans
 }
 
-// recoverInto, deferred, recovers a panic. The first one of a problem is
-// kept in *cause as a *prblm.PanicError with the stack of the panicking
-// frames, as the handler describes the panics it contains. Later ones are
-// dropped without capturing a stack: a request with many failing entries
-// would otherwise cost a stack each. The deferring function then returns
-// its zero results, since the panic came before it assigned them.
+// guard calls fn and returns its result and true, or the zero value and
+// false when fn panics: the panic is recovered into *cause by recoverInto.
+func guard[T any](cause **prblm.PanicError, fn func() T) (result T, returned bool) {
+	defer recoverInto(cause, &returned)
+
+	result = fn()
+	returned = true
+
+	return result, returned
+}
+
+// recoverInto, deferred by guard, recovers a panic. The first one of a
+// problem is kept in *cause as a *prblm.PanicError with the stack of the
+// panicking frames, as the handler describes the panics it contains. Later
+// ones are dropped without capturing a stack: a request with many failing
+// entries would otherwise cost a stack each. guard then returns the zero
+// value, since the panic came before it assigned its result.
+//
+// *returned, set once the guarded call returned normally, tells a panic
+// apart rather than recover's result, as in the core, so panic(nil) is
+// reported too under GODEBUG=panicnil=1, where recover returns nil: the
+// cause is then a *prblm.PanicError with a nil Value. A runtime.Goexit in the
+// consumer's code (t.FailNow in a test) also leaves it unset and records a
+// nil Value; Goexit goes on ending the goroutine, so nobody reads it.
 //
 // A panic with [http.ErrAbortHandler] itself is passed on, as the handler
 // does, so net/http aborts the response.
-func recoverInto(cause **prblm.PanicError) {
-	v := recover()
-	if v == nil {
+func recoverInto(cause **prblm.PanicError, returned *bool) {
+	if *returned {
 		return
 	}
+
+	v := recover()
 
 	//nolint:errorlint // only the sentinel itself aborts, not an error wrapping it.
 	if err, ok := v.(error); ok && err == http.ErrAbortHandler {
@@ -220,9 +239,10 @@ func translate(fe validator.FieldError, trans ut.Translator, cause **prblm.Panic
 		return "", false
 	}
 
-	defer recoverInto(cause)
-
-	text := fe.Translate(trans)
+	text, ok := guard(cause, func() string { return fe.Translate(trans) })
+	if !ok {
+		return "", false
+	}
 
 	return text, text != fe.Error()
 }
