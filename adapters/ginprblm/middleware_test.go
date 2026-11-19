@@ -262,16 +262,18 @@ func TestMiddleware_FaultyConsumer(t *testing.T) {
 	}
 }
 
-// panickyUnwrapError is an error whose Unwrap panics. The core walks error chains
-// outside its consumer-code guards, so Respond panics on it (design D2: the
-// adapter must survive a panicking Respond).
+// panickyUnwrapError is an error whose Unwrap panics. Core v0.2.0 walks its
+// chain outside its guards, so Respond panics on it, and the adapter's own
+// guard answers a bare 500 (design D2, TestRespond_Panics). Later cores
+// contain the panic and answer the safe 500 problem.
 type panickyUnwrapError struct{}
 
 func (panickyUnwrapError) Error() string { return "panicky" }
 func (panickyUnwrapError) Unwrap() error { panic("unwrap") }
 
-// Design D2 failure mode: Respond panics despite its contract.
-func TestMiddleware_FaultyConsumer_RespondPanics(t *testing.T) {
+// An error whose Unwrap panics gets a 500 without the panic value, and the
+// engine keeps serving, whichever core the adapter is built against.
+func TestMiddleware_FaultyConsumer_UnwrapPanics(t *testing.T) {
 	t.Parallel()
 
 	engine := gin.New()
@@ -288,8 +290,9 @@ func TestMiddleware_FaultyConsumer_RespondPanics(t *testing.T) {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
 
-	if body := rec.Body.String(); body != "" {
-		t.Errorf("body = %q, want empty", body)
+	// A bare 500 with core v0.2.0, the safe 500 problem with later cores.
+	if body := rec.Body.String(); body != "" && body != `{"title":"Internal Server Error","status":500,"instance":"/x"}` {
+		t.Errorf("body = %q, want empty or the safe 500 problem", body)
 	}
 
 	if rec := serve(t, engine, get(t, "/ok")); rec.Code != http.StatusOK {

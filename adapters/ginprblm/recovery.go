@@ -66,19 +66,30 @@ func recoverPanic(h *prblm.Handler, c *gin.Context) {
 
 	// A started response cannot take a problem any more, and a broken
 	// connection cannot take anything: the panic only went to the hook.
-	if c.Writer.Written() || isBrokenConnection(err.pe) {
+	if c.Writer.Written() || isBroken(h, c.Request, err.pe) {
 		return
 	}
 
-	defer guardWrite(h, c.Request)
+	defer reportPanic(h, c.Request)
 
 	send(c.Writer, res)
 }
 
-// guardWrite is deferred while a panic is answered. When writing the problem
-// panics too, the writer is broken and nothing more can be written, so the
-// second panic only goes to the hook instead of escaping Recovery.
-func guardWrite(h *prblm.Handler, r *http.Request) {
+// isBroken reports whether pe shows a broken client connection. The test
+// calls the Is methods of the panic value, which may panic too: that panic
+// goes to the hook, and the connection counts as working, so the panic is
+// still answered.
+func isBroken(h *prblm.Handler, r *http.Request, pe *prblm.PanicError) bool {
+	defer reportPanic(h, r)
+
+	return isBrokenConnection(pe)
+}
+
+// reportPanic is deferred around a step of answering a panic that may panic
+// in turn: testing the panic value for a broken connection, and writing the
+// problem, whose writer is then broken. The second panic only goes to the
+// hook instead of escaping Recovery.
+func reportPanic(h *prblm.Handler, r *http.Request) {
 	v := recover()
 	if v == nil {
 		return

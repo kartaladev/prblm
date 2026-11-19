@@ -39,14 +39,17 @@
 
 ## 3. Slice: gin `Recovery` answers a hostile panic value
 
-- [ ] 3.1 A hostile panic value under gin gets the safe 500 and the hook hears about both panics (gin-adapter / Scenario: Hostile panic value under gin); verify `go test -race -run TestRecovery_HostileValue ./` passes in `adapters/ginprblm`
+- [x] 3.1 A hostile panic value under gin gets the safe 500 and the hook hears about both panics (gin-adapter / Scenario: Hostile panic value under gin); verify `go test -race -run TestRecovery_HostileValue ./` passes in `adapters/ginprblm`
   - RED: in `adapters/ginprblm`'s recovery test file, write `TestRecovery_HostileValue` through `httptest.NewServer`, with the three Examples rows (two chains for the hostile `Is` value, plus EPIPE).
     - Assertions: the status, `Content-Type` and body; and that the hook calls unwrap to panic errors in order.
     - Expected failure: the hostile rows get a client `EOF`, because the panic escapes from `isBrokenConnection` at recovery.go:69.
   - GREEN: a small guarded check in `recoverPanic`. A panic from `isBrokenConnection` counts as not broken, and is reported with `_, _ = respond(h, c.Request, newPanicked(v))`, the pattern `guardWrite` uses.
   - REFACTOR: look for Duplicated Code between the new guard and `guardWrite`, and Extract Function only if it removes duplication without hiding the difference. Then `/simplify`.
-- [ ] 3.2 Add a "Fixed" entry to `adapters/ginprblm/CHANGELOG.md` under `[Unreleased]`, and correct the `respond` comment in `middleware.go` if it no longer matches the core's contained panics. Verify by reading.
-- [ ] 3.3 Verify slice 3:
+- [x] 3.1a (Added during apply.) Keep the adapter's own guard around `Respond` tested now that the core no longer panics; verify `go test -race ./...` and `GOWORK=off go test -race ./...` both pass in `adapters/ginprblm`
+  - Found while applying: `TestMiddleware_FaultyConsumer_RespondPanics` made `Respond` panic with an error whose `Unwrap` panics, the hole slice 1 closes. In workspace mode it failed with a 500 problem body instead of a bare 500. The fiber twin is unaffected, because its trigger is fiberprblm's own `withHint` walk.
+  - Change: `TestRespond_Panics` (internal) covers the guard through a nil handler, which still makes `Respond` panic in every core version. The external test becomes `TestMiddleware_FaultyConsumer_UnwrapPanics`, which accepts a bare 500 (core v0.2.0) or the safe 500 problem (later cores) and checks that the engine keeps serving.
+- [x] 3.2 Add a "Fixed" entry to `adapters/ginprblm/CHANGELOG.md` under `[Unreleased]`, and correct the `respond` comment in `middleware.go` if it no longer matches the core's contained panics. Verify by reading.
+- [x] 3.3 Verify slice 3:
   - In `adapters/ginprblm`, `go test -race -coverprofile=c.out ./... && go tool cover -func=c.out` shows `recoverPanic` covered on all three branches.
   - `go vet`, `golangci-lint`, gopls `go_diagnostics`, and `GOWORK=off go test ./...` (against core v0.2.0) are clean.
   - `internal/paritytest` passes.

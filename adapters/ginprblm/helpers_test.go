@@ -207,18 +207,20 @@ func fetch(t *testing.T, engine *gin.Engine, path string) *httptest.ResponseReco
 	return do(t, srv, get(t, srv.URL+path))
 }
 
-// assertPanicHook checks that the hook was called once with an error
-// unwrapping to a panic error holding value.
-func assertPanicHook(t *testing.T, hook *hookRecorder, value any) {
+// assertPanicHook checks that the hook was called once per value, in order,
+// each time with an error unwrapping to a panic error holding that value.
+func assertPanicHook(t *testing.T, hook *hookRecorder, values ...any) {
 	t.Helper()
 
 	got := hook.received()
-	if len(got) != 1 {
-		t.Fatalf("hook received %v, want one call", got)
+	if len(got) != len(values) {
+		t.Fatalf("hook received %v, want %d calls", got, len(values))
 	}
 
-	if pe, ok := errors.AsType[*prblm.PanicError](got[0]); !ok || pe.Value != value {
-		t.Errorf("hook received %v, want a panic error with value %v", got[0], value)
+	for i, value := range values {
+		if pe, ok := errors.AsType[*prblm.PanicError](got[i]); !ok || pe.Value != value {
+			t.Errorf("hook call %d = %v, want a panic error with value %v", i, got[i], value)
+		}
 	}
 }
 
