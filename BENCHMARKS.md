@@ -31,7 +31,8 @@ The core also has micro-benchmarks of its hot paths:
 
 | Benchmark | Cases | Source |
 |---|---|---|
-| `BenchmarkResolve` | `mapped`, `fallback` | `bench_test.go` |
+| `BenchmarkResolve` | `mapped`, `fallback`, `wrapped` (the unmapped error wrapped twice with `fmt.Errorf("%w")`, a walk of 3 entries), `unwalkable` (an error whose `Unwrap` returns itself: the walk aborts at the budget, and the hook gets the note) | `bench_test.go` |
+| `BenchmarkNew` | `entries=1`, `entries=4`, `entries=16` (the error chain walk of `internal/errwalk`) | `internal/errwalk/errwalk_test.go` |
 | `BenchmarkRespond` | `json`, `xml` | `bench_test.go` |
 | `BenchmarkNegotiate` | `empty`, `any` (`*/*`), `json` (`application/json`), `browser`, `xml`, `malformed` (the `Accept` header) | `respond_internal_test.go` |
 | `BenchmarkIsSubtype` | | `namespace_internal_test.go` |
@@ -60,8 +61,10 @@ go test -run '^$' -bench . -benchtime 1x ./...
 (cd adapters/fiberprblm && go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
-The adapters also run with `GOWORK=off`, against the released core in their `go.mod`, the
-configuration the published numbers are measured in:
+The adapters also run with `GOWORK=off`, the configuration the published numbers are measured in.
+That runs them against the core their `go.mod` resolves: the released core it requires or, while it
+replaces the core with `../..` (an adapter that needs an unreleased core), the core in the
+repository:
 
 ```sh
 (cd adapters/ginprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
@@ -101,7 +104,8 @@ Numbers are measured only on an idle machine; a loaded machine gives noisy, unre
 Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions in
 its own `go.mod`. An adapter module is then measured with the released core its `go.mod` requires,
 not the core in the repository, so the published adapter tables are measured again after every core
-release. To compare a change to the core in the adapters before it is released, run the adapters in
+release. While an adapter's `go.mod` replaces the core with `../..`, it is measured with the core in
+the repository instead. To compare a change to the core in the adapters before it is released, run the adapters in
 workspace mode (without `GOWORK=off`), old against new. The raw output goes to
 `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`, where `<module>` is `core` for the root
 module and the module's directory name for the others (`ginprblm`, `fiberprblm`). From the

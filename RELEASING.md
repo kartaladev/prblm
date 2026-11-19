@@ -30,6 +30,16 @@ their own modules in subdirectories, and depend on a released version of the roo
   the core release it needs, and its `go.mod` requires that version.
 - Then tag the other modules. Each requires only the core, so they can be tagged together, on the
   same commit.
+- From core v0.3.0, `adapters/ginprblm` and `adapters/fiberprblm` import the core's
+  `internal/errwalk`, the bounded error walk, and `internal/statushint`, which carries their status
+  hint outside the error's chain. Go lets them import these because they live under the core's
+  path. Those packages are not public API, so the adapters are released in step with the core:
+  every core release is followed by an adapter release that requires it, tagged on the same commit
+  as the other modules. `errwalk`'s surface (`New`, `Walk` and its methods `Is`, `IsAny` and
+  `Aborted`, `As`, `Has`, `Abort`, `Reason` with `ReasonBudget` and `ReasonPanic`, `Budget`) and
+  `statushint`'s (`Wrap`, `Error` with its fields `Err` and `Status`) are kept backward compatible
+  across core v0.x minor versions; a release that breaks it must release the core and both
+  adapters together, the adapters requiring that core.
 - `internal/paritytest` and `internal/plugintest` are unpublished test modules. They are never
   tagged, and they keep their `replace` directives so that they always test the adapters and the
   plugins in the repository. Tests that combine plugins (gorm over pgx, pgx over database/sql)

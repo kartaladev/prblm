@@ -1,12 +1,17 @@
 package prblm_test
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -391,5 +396,109 @@ func TestProblem_Header(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// problem-document / Scenario: Marking a header.
+func TestWithReplacedHeader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		fields   []prblm.Field
+		headers  http.Header
+		replaced []string
+	}{
+		// Examples: default.
+		{
+			name:    "ordinary header is not marked",
+			fields:  []prblm.Field{prblm.WithHeader("Cache-Control", "no-store")},
+			headers: http.Header{"Cache-Control": {"no-store"}},
+		},
+		{name: "no fields"},
+		// Examples: opt-in.
+		{
+			name:     "marked header",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			headers:  http.Header{"Cache-Control": {"no-store"}},
+			replaced: []string{"Cache-Control"},
+		},
+		{
+			name:     "name is canonicalized",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("cache-control", "no-store")},
+			headers:  http.Header{"Cache-Control": {"no-store"}},
+			replaced: []string{"Cache-Control"},
+		},
+		{
+			name: "same name marked twice is listed once",
+			fields: []prblm.Field{
+				prblm.WithReplacedHeader("Link", "</a>; rel=a"),
+				prblm.WithReplacedHeader("Link", "</b>; rel=b"),
+			},
+			headers:  http.Header{"Link": {"</a>; rel=a", "</b>; rel=b"}},
+			replaced: []string{"Link"},
+		},
+		{
+			name: "ordinary and marked headers together",
+			fields: []prblm.Field{
+				prblm.WithHeader("Retry-After", "5"),
+				prblm.WithReplacedHeader("Cache-Control", "no-store"),
+			},
+			headers:  http.Header{"Retry-After": {"5"}, "Cache-Control": {"no-store"}},
+			replaced: []string{"Cache-Control"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := mapping(prblm.New(http.StatusServiceUnavailable, tt.fields...)).Resolve(t.Context(), errVesselNotFound)
+
+			if !maps.EqualFunc(p.Header, tt.headers, slices.Equal[[]string]) {
+				t.Errorf("Header = %v, want %v", p.Header, tt.headers)
+			}
+
+			if got := prblm.ReplacedHeaders(p); !slices.Equal(got, tt.replaced) {
+				t.Errorf("replaced headers = %q, want %q", got, tt.replaced)
+			}
+
+			assertNoHeaderMembers(t, p)
+		})
+	}
+}
+
+// assertNoHeaderMembers checks that neither the JSON nor the XML document
+// of p has a member named after one of its headers or the marks.
+func assertNoHeaderMembers(t *testing.T, p *prblm.Problem) {
+	t.Helper()
+
+	body, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	doc, err := xml.Marshal(p)
+	if err != nil {
+		t.Fatalf("xml.Marshal() error = %v", err)
+	}
+
+	members := slices.Collect(maps.Keys(decodeMembers(t, body)))
+
+	for dec := xml.NewDecoder(bytes.NewReader(doc)); ; {
+		tok, err := dec.Token()
+		if err != nil {
+			break
+		}
+
+		if start, ok := tok.(xml.StartElement); ok {
+			members = append(members, start.Name.Local)
+		}
+	}
+
+	for _, member := range members {
+		if p.Header.Get(member) != "" || strings.EqualFold(member, "header") || strings.EqualFold(member, "replaced") {
+			t.Errorf("document has member %q: JSON %s, XML %s", member, body, doc)
+		}
 	}
 }

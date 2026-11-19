@@ -3,8 +3,10 @@ package prblm_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -289,7 +291,9 @@ func BenchmarkWrap(b *testing.B) {
 }
 
 // BenchmarkResolve measures resolution, finalization and enrichment of an
-// error, without encoding it.
+// error, without encoding it: a mapped error, an unmapped one, an unmapped
+// one wrapped twice by fmt.Errorf (a walk of 3 entries), and a self-looping
+// error, whose walk aborts at the budget and is reported with a note.
 func BenchmarkResolve(b *testing.B) {
 	h := prblm.NewHandler(benchOptions()...)
 
@@ -297,10 +301,26 @@ func BenchmarkResolve(b *testing.B) {
 		err    error
 		name   string
 		status int
+		// unwalkable requires the hooks to receive an ErrUnwalkableError
+		// note.
+		unwalkable bool
 	}{
 		{name: "mapped", err: errVesselNotFound, status: http.StatusNotFound},
 		{name: "fallback", err: errUnmapped, status: http.StatusInternalServerError},
+		{
+			name:   "wrapped",
+			err:    fmt.Errorf("load vessel: %w", fmt.Errorf("query: %w", errUnmapped)),
+			status: http.StatusInternalServerError,
+		},
+		{name: "unwalkable", err: newLoop("loop"), status: http.StatusInternalServerError, unwalkable: true},
 	}
+
+	// A handler with a recording hook tells an aborted walk, which Resolve
+	// reports with a note, from a plain fallback with the same status. It is
+	// not h, so the timed loop does not measure the recording.
+	var notes recorder
+
+	checker := prblm.NewHandler(append(benchOptions(), prblm.AddErrorHook(notes.hook))...)
 
 	for _, tc := range cases {
 		b.Run(tc.name, func(b *testing.B) {
@@ -308,6 +328,16 @@ func BenchmarkResolve(b *testing.B) {
 
 			if p := h.Resolve(ctx, tc.err); p.Status != tc.status {
 				b.Fatalf("Resolve() status = %d, want %d", p.Status, tc.status)
+			}
+
+			before := len(notes.recorded())
+			_ = checker.Resolve(ctx, tc.err)
+
+			noted := slices.ContainsFunc(notes.recorded()[before:], func(c hookCall) bool {
+				return errors.Is(c.err, prblm.ErrUnwalkableError)
+			})
+			if noted != tc.unwalkable {
+				b.Fatalf("Resolve() reported an ErrUnwalkableError note: %v, want %v", noted, tc.unwalkable)
 			}
 
 			b.ReportAllocs()

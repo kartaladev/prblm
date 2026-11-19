@@ -150,6 +150,18 @@ h := prblm.NewHandler(prblm.WithMappers(
 5. a status hint attached with `WithStatus`
 6. the safe fallback: a 500 with no detail
 
+The error chain is walked once, before the first step, in the order `errors.Is` visits it, and
+every step scans that one walk. The walk examines at most 1,000 entries and never calls a method
+of a typed nil (a nil pointer), which is skipped. An error the handler cannot inspect is not safe to
+map, so it fails closed: a chain that loops back on itself, nests too deep or fans out too wide,
+or whose `Unwrap`, `Is` or `As` method panics, gets the safe 500 at once, even when a step would
+have matched. The hooks first receive a note wrapping `ErrUnwalkableError` with the reason
+(`budget` or `panic`), then the error. *(Mirrors `ExampleErrUnwalkableError`.)* An `As` method
+that reports a match but leaves a pointer or interface target nil is no match. Your own mappers,
+describers and hooks still receive the error as returned: code of yours that calls `errors.Is` or
+`errors.As` itself sees the raw chain, typed nils included, and can still hang on a cycle as
+`errors.Is` does. The `Is`, `As` and `Status` helpers below use the bounded walk.
+
 A mapper returns `nil` for an error it does not recognize. `Is`, `As` and `Status` build mappers
 for sentinel and typed errors. *(Mirrors `ExampleIs` and `ExampleAs`.)*
 
@@ -330,7 +342,9 @@ h := prblm.NewHandler(prblm.OnError(func(_ context.Context, err error, p *prblm.
 ```
 
 Before that call, the hook may also receive notes about mistakes the handler worked around: a
-`*PanicError` from consumer code that panicked, an error wrapping `ErrInvalidStatus` for a mapper
+`*PanicError` from consumer code that panicked (a `panic(nil)` included, also under
+`GODEBUG=panicnil=1`), an error wrapping `ErrUnwalkableError` for an error chain that cannot be
+walked (see [Mapping errors](#mapping-errors)), an error wrapping `ErrInvalidStatus` for a mapper
 status outside 400–599, an error wrapping `ErrInvalidType` for a relative type that is not a valid
 sub-type (see [Problem types](#problem-types)), an error wrapping `ErrUndocumentedType` for a
 sub-type without a registered definition (see [Discovering problem types](#discovering-problem-types)),
@@ -382,7 +396,15 @@ h := prblm.NewHandler(prblm.OnError(func(ctx context.Context, err error, _ *prbl
 
 A panic with `http.ErrAbortHandler` is passed on so net/http aborts the response. After the
 handler has started its response, or when the client connection is broken, nothing more is
-written and only the hook hears of the panic.
+written and only the hook hears of the panic. The panic value is walked like a returned error: a
+value whose chain loops back on itself, or whose methods panic, still gets the safe 500, and the
+hooks receive an `ErrUnwalkableError` note, then the `*PanicError`.
+
+A handler that calls `runtime.Goexit` (`t.FailNow` in a test) is answered like a `panic(nil)`: over
+HTTP/1.x the client gets the safe 500 complete, while over HTTP/2 net/http resets the stream after
+the problem's bytes, and fiber cannot answer it at all, since its goroutine ends before fiber
+writes. Under net/http and gin the hooks are told, once by each nested recovery; under fiber they
+hear nothing.
 
 ## Formats
 
@@ -473,7 +495,19 @@ headers, body) without writing it. Framework adapters copy that response to thei
 every framework produces the same output. `Response.MergeInto` merges the problem headers into
 the headers already set on the framework's response by the same rules as the net/http adapter:
 problem headers replace existing ones, `Vary` keeps the existing field names and adds `Accept`,
-and a `Cache-Control` the handler set is kept.
+and a `Cache-Control` the handler set is kept. `Handler.RespondPanic` is its counterpart for a
+recovered panic: it returns the safe 500 response that `Recover` would write, or false when the
+client connection is broken, so an adapter's recovery answers panics as net/http does.
+
+A problem that must win over the handler's headers marks them with `WithReplacedHeader`, which
+applies with net/http and every adapter. A problem that reveals per-user state, for example,
+forces `no-store` even on a route marked public, which a shared cache would otherwise replay to
+other users. `WithHeader` keeps the rules above.
+
+```go
+var ErrSessionExpired = prblm.New(http.StatusUnauthorized,
+	prblm.WithReplacedHeader("Cache-Control", "no-store"))
+```
 
 The adapters are separate modules under `adapters/`, so an application downloads only the framework
 it uses. Before v0.2.0 they were at `github.com/kartaladev/prblm/ginprblm` and
@@ -874,6 +908,7 @@ since that file still names the adapter's old package path.
 | Behavior | Default | Why | Change it with |
 |---|---|---|---|
 | Unmapped errors | 500 with title "Internal Server Error" and no detail | never leak internals | consumer mappers |
+| Error chain walk | once per error, at most 1,000 entries; a chain that cannot be walked gets the safe 500 and an `ErrUnwalkableError` note | a cyclic chain or a panicking method must not hang or crash the handler, and an error it cannot inspect is not safe to map | — |
 | Built-in mappers | on | common request body errors get a correct 4xx without setup | `WithoutBuiltins()` |
 | Sentinel errors (`ErrNotFound`, ...) | mapped to their status, `about:blank`, with a fixed detail | a returned sentinel works without setup and leaks no wrap text | a consumer mapper; `WithoutBuiltins()` |
 | `type` | `about:blank`, omitted from the document | the RFC 9457 default | set per problem |
@@ -886,7 +921,7 @@ since that file still names the adapter's old package path.
 | Documentation caching | `public, max-age=3600` with a strong `ETag` | definitions change only with a redeploy | — |
 | `instance` | the request path, without the query string | identify the occurrence without leaking query tokens | an enricher, or set per problem |
 | Format | JSON, XML when the client prefers it | most clients read JSON | — |
-| `Cache-Control` | `no-store`, unless the handler or the problem sets one | caches must not replay an error | set the header |
+| `Cache-Control` | `no-store`, unless the handler or the problem sets one | caches must not replay an error | set the header; `WithReplacedHeader` to override the handler's |
 | `Vary` | `Accept` added, existing values kept | the format depends on `Accept` | — |
 | Encoding failure | the constant `{"title":"Internal Server Error","status":500}` | never send a partial document | — |
 | Panic recovery | off | never surprise existing recovery middleware | `Handler.Recover` |

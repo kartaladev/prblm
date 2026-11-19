@@ -69,9 +69,11 @@ jobs:
         if: contains(fromJSON('[".", "adapters/ginprblm", "adapters/fiberprblm"]'), matrix.module)
         run: go test -run '^$' -bench . -benchtime 1x ./...
       - name: benchmarks (smoke, once each, module only)
-        # The published adapter numbers are measured with GOWORK=off,
-        # against the released core named in each go.mod, so that
-        # configuration must keep running too.
+        # The published adapter numbers are measured with GOWORK=off, so
+        # that configuration must keep running too. It runs against the
+        # core each go.mod resolves: the released core it requires, or,
+        # while go.mod replaces the core with ../.. (an adapter that needs
+        # an unreleased core), the core in the repository.
         if: contains(fromJSON('["adapters/ginprblm", "adapters/fiberprblm"]'), matrix.module)
         run: GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...
 
