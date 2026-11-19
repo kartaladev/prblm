@@ -24,3 +24,8 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )
+
+// The adapter uses the unreleased core (internal/errwalk and
+// internal/statushint) until the core is tagged; RELEASING.md says to drop
+// this line before tagging the adapter.
+replace github.com/kartaladev/prblm => ../..

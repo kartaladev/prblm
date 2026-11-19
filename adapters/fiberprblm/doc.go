@@ -61,7 +61,9 @@
 // as the core's [prblm.Handler.Discovery]. A route registered at such a path
 // takes precedence, a handler that returns fiber.ErrNotFound gets a 404
 // problem as usual, and a route for another method gets fiber's 405 as a
-// problem. The error handler never sees a request a route answers; add the
+// problem. A panic [Recovery] recovered on such a path is never taken for
+// route-not-found: it gets the safe 500 problem, whatever its value wraps.
+// The error handler never sees a request a route answers; add the
 // opt-in [Discovery] middleware with the same options to have the OnError
 // hook told, with a note wrapping [prblm.ErrShadowedDocumentation], when a
 // route hides documentation.
@@ -79,9 +81,19 @@
 // the handler started is never replaced; the error then only reaches the
 // hook. When the request context is canceled and the error wraps
 // [context.Canceled], nothing is written and the error only reaches the
-// hook. Should the core itself panic while resolving an error (for example
-// on an error whose Unwrap method panics), the response is a bare 500
-// without a body.
+// hook.
+//
+// Every look into an error chain (the [*fiber.Error] code, fiber's
+// route-not-found error, a client that went away) is bounded and reports
+// nothing. An error whose chain such a look cannot finish (it loops back on
+// itself, or one of its methods panics) gets no hint, and is not taken for
+// fiber's route-not-found error or for a client that went away. The core
+// then answers it: when its own walk cannot finish either, with the safe 500
+// problem, and the hooks receive an [prblm.ErrUnwalkableError] note first;
+// otherwise as usual, with no note, as for an error whose Is or As method
+// panics only when asked for a *fiber.Error. Should the core itself panic
+// while resolving an error all the same, the response is a bare 500 without
+// a body and the app keeps serving.
 //
 // A configuration mistake, such as an invalid option, is a programming
 // mistake: [ErrorHandler] panics when it is created, so it shows at startup

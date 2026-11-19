@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
 	"strconv"
@@ -366,4 +367,21 @@ func isMethodNotAllowedProblem(t *testing.T, r response) {
 	if r.status != http.StatusMethodNotAllowed || r.header.Get("Content-Type") != "application/problem+json" {
 		t.Errorf("response %d %q, want a 405 problem", r.status, r.header.Get("Content-Type"))
 	}
+}
+
+// Murphy row for the recovered-panic check of the route-not-found test: it
+// looks for the panic Recovery returns by type alone, so it calls no method
+// of the error. A returned error wrapping fiber.ErrNotFound whose As method
+// panics is still fiber's route-not-found on an unrouted documentation
+// path, as before, and the documentation is served.
+func TestErrorHandler_Discovery_AsPanicNotFound(t *testing.T) {
+	t.Parallel()
+
+	app := discoveryApp()
+	app.Use(func(fiber.Ctx) error { return fmt.Errorf("%w: %w", fiber.ErrNotFound, asPanicError{}) })
+
+	req := get(t, http.MethodGet, "/v1/api/probs/out-of-credit")
+	req.Header.Set("Accept", "application/json")
+
+	isDocumentation(t, testWithin(t, app, req))
 }
