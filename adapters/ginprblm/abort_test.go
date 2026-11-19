@@ -258,8 +258,10 @@ func TestMiddleware_BodyWritten(t *testing.T) {
 	}
 }
 
-// gin-adapter / Scenario: Client went away.
-func TestMiddleware_Canceled(t *testing.T) {
+// gin-adapter / Scenario: Client went away. An error whose chain cannot be
+// walked is answered with the safe 500, as if the client were still there:
+// the hook receives a note, then the error.
+func TestMiddleware_ClientGone(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -267,9 +269,20 @@ func TestMiddleware_Canceled(t *testing.T) {
 		canceled  bool
 		err       error
 		isWritten bool
+		reason    string // the note's reason, "" for no note
+		noteValue any    // the panic value the note wraps, for reason "panic"
 	}{
 		{name: "canceled request", canceled: true, err: fmt.Errorf("query: %w", context.Canceled), isWritten: false},
 		{name: "active request", canceled: false, err: context.Canceled, isWritten: true},
+		{name: "canceled, unwrap returns itself", canceled: true, err: &loopError{}, isWritten: true, reason: "budget"},
+		{
+			name:      "canceled, is panics",
+			canceled:  true,
+			err:       isPanicError{},
+			isWritten: true,
+			reason:    "panic",
+			noteValue: "boom",
+		},
 	}
 
 	for _, tt := range tests {
@@ -278,7 +291,9 @@ func TestMiddleware_Canceled(t *testing.T) {
 
 			var hook hookRecorder
 
-			engine := newEngine(func(c *gin.Context) { _ = c.Error(tt.err) }, hook.option())
+			engine := gin.New()
+			engine.Use(ginprblm.Middleware(hook.option()))
+			engine.GET("/v1/vessels/7", func(c *gin.Context) { record(c, tt.err) })
 
 			ctx, cancel := context.WithCancel(t.Context())
 			if tt.canceled {
@@ -287,25 +302,62 @@ func TestMiddleware_Canceled(t *testing.T) {
 				t.Cleanup(cancel)
 			}
 
-			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/x", http.NoBody)
-			rec := serve(t, engine, req)
+			req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/vessels/7", http.NoBody)
+			rec := serveWithin(t, engine, req)
 
-			isProblem := rec.Header().Get("Content-Type") == "application/problem+json"
-			if isProblem != tt.isWritten {
-				t.Errorf("problem written = %v, want %v (status %d, body %q)", isProblem, tt.isWritten, rec.Code, rec.Body.String())
+			assertSafe500(t, rec, tt.isWritten)
+
+			if tt.reason != "" {
+				assertNoted(t, &hook, tt.reason, tt.noteValue, isSame(tt.err))
+			} else {
+				assertHookOnce(t, &hook, isSame(tt.err))
 			}
-
-			if tt.isWritten && rec.Code != http.StatusInternalServerError {
-				t.Errorf("status = %d, want 500", rec.Code)
-			}
-
-			if !tt.isWritten && rec.Body.Len() != 0 {
-				t.Errorf("body = %q, want nothing written by the library", rec.Body.String())
-			}
-
-			assertHook(t, &hook, tt.err)
 		})
 	}
+}
+
+// canceledTargetPanicError wraps err, and its Is method panics only when asked
+// for context.Canceled, so only the middleware's client-gone walk aborts.
+type canceledTargetPanicError struct{ err error }
+
+func (canceledTargetPanicError) Error() string { return "hostile to the client-gone walk" }
+
+func (e canceledTargetPanicError) Unwrap() error { return e.err }
+
+func (canceledTargetPanicError) Is(target error) bool {
+	if target == context.Canceled {
+		panic("boom")
+	}
+
+	return false
+}
+
+// gin-adapter / Scenario: Client went away, the row whose chain only the
+// middleware cannot walk. The client-gone walk aborts on a panic for
+// context.Canceled alone, so the error counts as from a client still there,
+// and the core, whose walk finishes, answers it as usual: a 404 for the
+// ErrNotFound inside it, and the hook receives the error alone, with no
+// note.
+func TestMiddleware_ClientGone_OnlyTheCheckAborts(t *testing.T) {
+	t.Parallel()
+
+	var hook hookRecorder
+
+	err := canceledTargetPanicError{err: prblm.ErrNotFound}
+	engine := gin.New()
+	engine.Use(ginprblm.Middleware(hook.option()))
+	engine.GET("/v1/vessels/7", func(c *gin.Context) { record(c, err) })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	rec := serveWithin(t, engine, httptest.NewRequestWithContext(ctx, http.MethodGet, "/v1/vessels/7", http.NoBody))
+
+	if ct := rec.Header().Get("Content-Type"); rec.Code != http.StatusNotFound || ct != "application/problem+json" {
+		t.Errorf("response = %d %q, want a 404 application/problem+json problem", rec.Code, ct)
+	}
+
+	assertHookOnce(t, &hook, isSame(err))
 }
 
 // Design D3 failure mode: middleware registered before ours commits the
@@ -335,4 +387,66 @@ func TestMiddleware_RegisteredLate(t *testing.T) {
 	}
 
 	assertHook(t, &hook, ErrLocked)
+}
+
+// wrapN returns err wrapped n times with %w.
+func wrapN(err error, n int) error {
+	for range n {
+		err = fmt.Errorf("w: %w", err)
+	}
+
+	return err
+}
+
+// error-chain-walk / Scenario: Budget boundary, the adapter rows. The status
+// hint of c.AbortWithError is not an entry of the error's chain, so it costs
+// nothing of the budget: a 1,000-entry error is walked to its end, where a
+// mapper recognizes ErrLocked, and a 1,001-entry error still aborts.
+func TestMiddleware_AbortWithError_Budget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		entries int
+		status  int
+	}{
+		{name: "1,000 entries", entries: 1000, status: http.StatusLocked},
+		{name: "1,001 entries", entries: 1001, status: http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var hook hookRecorder
+
+			err := wrapN(ErrLocked, tt.entries-1)
+			engine := gin.New()
+			engine.Use(ginprblm.Middleware(hook.option(), prblm.WithMappers(prblm.Status(ErrLocked, http.StatusLocked))))
+			engine.GET("/v1/vessels/7", func(c *gin.Context) { _ = c.AbortWithError(http.StatusConflict, err) })
+
+			rec := serveWithin(t, engine, get(t, "/v1/vessels/7"))
+
+			// The hook receives err with the hint around it, and nothing
+			// here walks it.
+			isHinted := func(e error) bool {
+				u, ok := e.(interface{ Unwrap() error })
+
+				return ok && u.Unwrap() == err //nolint:errorlint // err itself.
+			}
+
+			if tt.status == http.StatusInternalServerError {
+				assertSafe500(t, rec, true)
+				assertNoted(t, &hook, "budget", nil, isHinted)
+
+				return
+			}
+
+			if rec.Code != tt.status {
+				t.Errorf("status = %d, want %d", rec.Code, tt.status)
+			}
+
+			assertHookOnce(t, &hook, isHinted)
+		})
+	}
 }

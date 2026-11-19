@@ -38,3 +38,8 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
+
+// The adapter uses the unreleased core (internal/errwalk and
+// internal/statushint) until the core is tagged; RELEASING.md says to drop
+// this line before tagging the adapter.
+replace github.com/kartaladev/prblm => ../..

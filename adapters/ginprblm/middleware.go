@@ -8,6 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kartaladev/prblm"
+	"github.com/kartaladev/prblm/internal/errwalk"
+	"github.com/kartaladev/prblm/internal/statushint"
 )
 
 // Middleware returns gin middleware that writes the last error recorded with
@@ -169,7 +171,7 @@ func finish(h *prblm.Handler, c *gin.Context, w *deferredWriter) {
 	case last != nil:
 		answer(h, c.Request, w, withHint(last.Err, recorded))
 	case recorded >= http.StatusBadRequest:
-		answer(h, c.Request, w, prblm.WithStatus(ErrStatusOnly, recorded))
+		answer(h, c.Request, w, withHint(ErrStatusOnly, recorded))
 	default:
 		w.commitNow()
 	}
@@ -179,19 +181,27 @@ func finish(h *prblm.Handler, c *gin.Context, w *deferredWriter) {
 // request context is canceled and err wraps context.Canceled. A
 // context.Canceled from elsewhere, with the client still connected, is
 // answered like any other error.
+//
+// The chain is walked only once the context is done, so the common path
+// pays nothing, and the walk is bounded: a chain this walk cannot finish
+// counts as "not gone", and this walk reports nothing. The core then answers
+// the error, with the safe 500 and a note when its own walk cannot finish
+// either, as usual otherwise.
 func isClientGone(r *http.Request, err error) bool {
-	return r.Context().Err() != nil && errors.Is(err, context.Canceled)
+	return r.Context().Err() != nil && errwalk.New(err).Is(context.Canceled) >= 0
 }
 
-// withHint attaches an abort status to err as a hint: mappers and
-// self-describing errors still take precedence, and a status below 400 is
-// no hint at all.
+// withHint attaches an abort status to err as a hint, as [prblm.WithStatus]
+// would: mappers and self-describing errors still take precedence, and a
+// status below 400 is no hint at all. The hint goes to the core outside the
+// error's chain, so it costs nothing of the walk's budget: an error the core
+// could walk alone is still walked.
 func withHint(err error, status int) error {
 	if status < http.StatusBadRequest {
 		return err
 	}
 
-	return prblm.WithStatus(err, status)
+	return statushint.Wrap(err, status)
 }
 
 // answer writes the problem response for err to w. When there is nothing
@@ -208,20 +218,30 @@ func answer(h *prblm.Handler, r *http.Request, w *deferredWriter, err error) {
 	send(w, res)
 }
 
-// respond resolves err into the problem response for r. The core contains
-// panics in mappers, enrichers and the hook, and from core v0.2.1 in the
-// error's own methods too; core v0.2.0, which this module still accepts, does
-// not contain a panicking Unwrap or As. Should Respond panic, the response is a
-// bare 500 without a body, which cannot fail the same way, and the server
-// keeps serving.
+// respond resolves err into the problem response for r. The core this
+// module requires contains panics in mappers, enrichers, the hooks and the
+// error's own methods, and bounds the walk of its chain, so Respond panics
+// only on a request context whose Value panics, which breaks far more than
+// this library. The recover is the last line of defense all the same:
+// should Respond panic, the response is a bare 500 without a body, which
+// cannot fail the same way, and the server keeps serving.
+//
+// A panic is told apart by Respond not returning, not by what recover
+// returns, so panic(nil) under GODEBUG=panicnil=1 gets the bare 500 too.
 func respond(h *prblm.Handler, r *http.Request, err error) (res prblm.Response, ok bool) {
+	returned := false
+
 	defer func() {
-		if recover() != nil {
+		if !returned {
+			_ = recover()
 			res, ok = prblm.Response{Status: http.StatusInternalServerError}, true
 		}
 	}()
 
-	return h.Respond(r.Context(), requestOf(r), err)
+	res, ok = h.Respond(r.Context(), requestOf(r), err)
+	returned = true
+
+	return res, ok
 }
 
 // requestOf describes r for [prblm.Handler.Respond]. It uses the URL path, so
