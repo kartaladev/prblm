@@ -1540,6 +1540,105 @@ func TestRecover_Started(t *testing.T) {
 	}
 }
 
+// serveContained is serveRecorded, failing the test instead of crashing it
+// when a panic escapes handler.
+func serveContained(t *testing.T, handler http.Handler) *httptest.ResponseRecorder {
+	t.Helper()
+
+	defer func() {
+		if v := recover(); v != nil {
+			t.Fatalf("a panic escaped the handler: %v", v)
+		}
+	}()
+
+	return serveRecorded(t, handler, "")
+}
+
+// panic-recovery / Scenario: Hostile panic value. The row of a value wrapping
+// syscall.EPIPE is TestRecover_Broken, which Plan 9 cannot build.
+func TestRecover_HostileValue(t *testing.T) {
+	t.Parallel()
+
+	// report is one hook call: the panic value its *prblm.PanicError holds,
+	// and the status of its problem, 0 for none.
+	type report struct {
+		value  any
+		status int
+	}
+
+	tests := []struct {
+		name  string
+		value any
+		hooks []report
+	}{
+		{
+			name:  "is method panics",
+			value: isPanicError{},
+			hooks: []report{{value: "boom"}, {value: isPanicError{}, status: 500}},
+		},
+		{name: "plain value", value: "boom", hooks: []report{{value: "boom", status: 500}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			h := prblm.NewHandler(prblm.OnError(r.hook))
+			rec := serveContained(t, h.Recover(panicking(tt.value)))
+
+			if rec.Code != 500 || rec.Body.String() != safe500 {
+				t.Errorf("got %d %s, want 500 %s", rec.Code, rec.Body, safe500)
+			}
+
+			if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
+				t.Errorf("Content-Type = %q, want application/problem+json", got)
+			}
+
+			calls := r.recorded()
+			if len(calls) != len(tt.hooks) {
+				t.Fatalf("hook called %d times, want %d: %+v", len(calls), len(tt.hooks), calls)
+			}
+
+			for i, want := range tt.hooks {
+				pe, ok := errors.AsType[*prblm.PanicError](calls[i].err)
+				if !ok || pe.Value != want.value || calls[i].status != want.status {
+					t.Errorf("hook call %d got %v with status %d, want a panic holding %v with status %d",
+						i, calls[i].err, calls[i].status, want.value, want.status)
+				}
+			}
+		})
+	}
+}
+
+// panic-recovery / Scenario: Hostile panic value without a hook.
+func TestRecover_HostileValue_NoHook(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value any
+	}{
+		{name: "is method panics", value: isPanicError{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := prblm.NewHandler().Recover(panicking(tt.value))
+
+			// The second request shows the handler still serves.
+			for i := range 2 {
+				if rec := serveContained(t, handler); rec.Code != 500 {
+					t.Errorf("request %d: status = %d, want 500", i+1, rec.Code)
+				}
+			}
+		})
+	}
+}
+
 // headerPanicWriter is a response writer whose Header panics the first
 // panics times it is called.
 type headerPanicWriter struct {

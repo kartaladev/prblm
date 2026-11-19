@@ -98,6 +98,10 @@ func NewHandler(opts ...Option) *Handler {
 //  5. a status hint attached with [WithStatus]
 //  6. the fallback: a 500 problem that carries none of the error's text
 //
+// A step that panics, in consumer code or in a method of err itself such as
+// its Is or As method, counts as no match, and the panic is reported to the
+// hooks as a [*PanicError].
+//
 // The result is always a new problem that the caller may modify: a matched
 // problem is copied, so problems shared between requests (for example
 // package-level values) are never changed. A status outside 400–599 is replaced
@@ -148,7 +152,9 @@ func (h *Handler) match(ctx context.Context, err error) *Problem {
 		return p
 	}
 
-	return hinted(err)
+	// Looking for a hint calls the error's own As methods, which may panic
+	// like any consumer code.
+	return safeCall(ctx, h, func() *Problem { return hinted(err) })
 }
 
 // firstMatch returns the problem from the first mapper that recognizes err,
@@ -528,7 +534,10 @@ func (h *Handler) recoverPanic(tw *trackingWriter, r *http.Request) {
 	req := requestOf(r)
 	ctx := withRequest(r.Context(), req)
 
-	if tw.started || isBrokenConnection(pe) {
+	// Testing for a broken connection calls the Is methods of the panic
+	// value, which may panic too; the connection then counts as working, so
+	// the panic is answered.
+	if tw.started || safeCall(ctx, h, func() bool { return isBrokenConnection(pe) }) {
 		h.report(ctx, pe, nil)
 
 		return

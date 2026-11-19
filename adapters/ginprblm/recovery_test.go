@@ -289,6 +289,66 @@ func TestRecovery_Edge(t *testing.T) {
 	})
 }
 
+// isPanicError is an error whose Is method panics with "boom".
+type isPanicError struct{}
+
+func (isPanicError) Error() string { return "is panics" }
+func (isPanicError) Is(error) bool { panic("boom") }
+
+// gin-adapter / Scenario: Hostile panic value under gin. The row of a value
+// wrapping syscall.EPIPE is TestRecovery_Edge/broken_connection.
+func TestRecovery_HostileValue(t *testing.T) {
+	t.Parallel()
+
+	const safe500 = `{"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}`
+
+	tests := []struct {
+		name       string
+		middleware bool // Middleware installed after Recovery
+	}{
+		{name: "recovery, then middleware", middleware: true},
+		{name: "recovery only"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var hook hookRecorder
+
+			engine := gin.New()
+			engine.Use(ginprblm.Recovery(hook.option()))
+
+			if tt.middleware {
+				engine.Use(ginprblm.Middleware(hook.option()))
+			}
+
+			engine.GET("/v1/vessels/7", func(*gin.Context) { panic(isPanicError{}) })
+
+			rec := func() *httptest.ResponseRecorder {
+				defer func() {
+					if v := recover(); v != nil {
+						t.Fatalf("a panic escaped gin: %v", v)
+					}
+				}()
+
+				return serve(t, engine, get(t, "/v1/vessels/7"))
+			}()
+
+			if rec.Code != http.StatusInternalServerError || rec.Body.String() != safe500 {
+				t.Errorf("got %d %s, want 500 %s", rec.Code, rec.Body, safe500)
+			}
+
+			if ct := rec.Header().Get("Content-Type"); ct != "application/problem+json" {
+				t.Errorf("Content-Type = %q, want application/problem+json", ct)
+			}
+
+			// The original panic, then the panic of its Is method.
+			assertPanicHook(t, &hook, isPanicError{}, "boom")
+		})
+	}
+}
+
 // Slice 5 end to end: route-group scopes and recovered panics over a real
 // server, with Recovery and Middleware together.
 func TestRecovery_EndToEnd(t *testing.T) {

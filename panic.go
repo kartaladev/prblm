@@ -29,10 +29,11 @@ func (e *PanicError) Unwrap() error {
 	return err
 }
 
-// safeCall runs consumer code. A panic in fn is recovered and reported to the
-// hooks as a *PanicError, and safeCall then returns the zero value, so
-// faulty consumer code cannot break the response. The stack is only captured
-// when a hook will receive it.
+// safeCall runs consumer code, including code that calls the Is or As methods
+// of an error value, which come from the error's author. A panic in fn is
+// recovered and reported to the hooks as a *PanicError, and safeCall then
+// returns the zero value, so faulty consumer code cannot break the response.
+// The stack is only captured when a hook will receive it.
 func safeCall[T any](ctx context.Context, h *Handler, fn func() T) T {
 	defer func() {
 		if v := recover(); v != nil && h.isReporting(ctx) {

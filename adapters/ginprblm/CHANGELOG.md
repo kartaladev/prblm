@@ -9,6 +9,14 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
 
 ## [Unreleased]
 
+### Fixed
+
+- `Recovery` answers a panic whose value is an error with a panicking `Is` method. Its broken
+  connection check used to let that second panic escape `Recovery` to net/http, so the client got
+  no response. The connection now counts as working: the client gets the safe 500 problem, and the
+  hooks receive the original panic and then the second one. This fix doesn't need a new core: the
+  module still requires `github.com/kartaladev/prblm` v0.2.0.
+
 ## [0.2.0] - 2026-11-18
 
 ### Changed (BREAKING)

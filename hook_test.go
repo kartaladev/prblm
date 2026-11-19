@@ -240,6 +240,138 @@ func TestResolve_FaultyConsumer_NoHook(t *testing.T) {
 	}
 }
 
+// asPanicError is an error whose As method panics with "boom".
+type asPanicError struct{}
+
+func (asPanicError) Error() string { return "as panics" }
+func (asPanicError) As(any) bool   { panic("boom") }
+
+// isPanicError is an error whose Is method panics with "boom".
+type isPanicError struct{}
+
+func (isPanicError) Error() string { return "is panics" }
+func (isPanicError) Is(error) bool { panic("boom") }
+
+// valueIsError has value-receiver methods, so a nil *valueIsError panics
+// when its Is method is called.
+type valueIsError struct{}
+
+func (valueIsError) Error() string { return "value is" }
+func (valueIsError) Is(error) bool { return false }
+
+// emptyAsError's As method reports a match without setting its target, so
+// errors.As and errors.AsType hand back the target's zero value: a nil
+// pointer or a nil interface.
+type emptyAsError struct{}
+
+func (emptyAsError) Error() string { return "empty as" }
+func (emptyAsError) As(any) bool   { return true }
+
+// writeContained is write, failing the test instead of crashing it when a
+// panic escapes the handler.
+func writeContained(t *testing.T, h *prblm.Handler, err error) *httptest.ResponseRecorder {
+	t.Helper()
+
+	return serveContained(t, h.Wrap(func(http.ResponseWriter, *http.Request) error { return err }))
+}
+
+// error-mapping / Scenario: Error methods panic.
+func TestResolve_FaultyError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		opts   []prblm.Option
+		err    error
+		status int
+		body   string
+		// boom is set when every panic error the hooks receive holds "boom".
+		boom bool
+	}{
+		// Examples: zero configuration.
+		{name: "as method panics", err: asPanicError{}, status: 500, body: safe500, boom: true},
+		{name: "is method panics", err: isPanicError{}, status: 500, body: safe500, boom: true},
+		{name: "nil pointer with a value-receiver is method", err: (*valueIsError)(nil), status: 500, body: safe500},
+		// Examples: the status-hint step.
+		{name: "as method panics without built-ins", opts: []prblm.Option{prblm.WithoutBuiltins()}, err: asPanicError{}, status: 500, body: safe500, boom: true},
+		{name: "as method leaves its target empty", opts: []prblm.Option{prblm.WithoutBuiltins()}, err: emptyAsError{}, status: 500, body: safe500},
+		// Examples: another step still matches.
+		{
+			name:   "consumer mapper matches",
+			opts:   []prblm.Option{prblm.WithMappers(prblm.Status(errVesselNotFound, 409))},
+			err:    errors.Join(errVesselNotFound, asPanicError{}),
+			status: 409,
+			body:   `{"title":"Conflict","status":409,"instance":"/v1/vessels/7"}`,
+			boom:   true,
+		},
+		{
+			name:   "status hint over an is method that panics",
+			err:    prblm.WithStatus(isPanicError{}, 404),
+			status: 404,
+			body:   `{"title":"Not Found","status":404,"instance":"/v1/vessels/7"}`,
+			boom:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			h := prblm.NewHandler(append(tt.opts, prblm.OnError(r.hook))...)
+			rec := writeContained(t, h, tt.err)
+
+			if rec.Code != tt.status {
+				t.Errorf("status = %d, want %d", rec.Code, tt.status)
+			}
+
+			// The exact body also proves that the panic value never reaches it.
+			if got := rec.Body.String(); got != tt.body {
+				t.Errorf("body = %s, want %s", got, tt.body)
+			}
+
+			calls := r.recorded()
+			assertHookCalls(t, calls, tt.err, tt.status, anyPanics)
+
+			if !tt.boom {
+				return
+			}
+
+			for _, c := range calls[:len(calls)-1] {
+				if pe, ok := errors.AsType[*prblm.PanicError](c.err); ok && pe.Value != "boom" {
+					t.Errorf("panic value = %v, want boom", pe.Value)
+				}
+			}
+		})
+	}
+}
+
+// error-mapping / Scenario: Error methods panic without a hook.
+func TestResolve_FaultyError_NoHook(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []prblm.Option
+	}{
+		{name: "zero configuration"},
+		{name: "built-ins disabled", opts: []prblm.Option{prblm.WithoutBuiltins()}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			rec := writeContained(t, prblm.NewHandler(tt.opts...), asPanicError{})
+
+			if rec.Code != 500 {
+				t.Errorf("status = %d, want 500", rec.Code)
+			}
+		})
+	}
+}
+
 // names returns the names of the hooks called, in order.
 func names(calls []hookCall) []string {
 	out := make([]string, 0, len(calls))

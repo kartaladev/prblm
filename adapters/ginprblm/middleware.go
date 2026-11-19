@@ -209,8 +209,9 @@ func answer(h *prblm.Handler, r *http.Request, w *deferredWriter, err error) {
 }
 
 // respond resolves err into the problem response for r. The core contains
-// panics in mappers, enrichers and the hook, but not in methods of the error
-// itself, such as a panicking Unwrap: should Respond panic, the response is a
+// panics in mappers, enrichers and the hook, and from core v0.2.1 in the
+// error's own methods too; core v0.2.0, which this module still accepts, does
+// not contain a panicking Unwrap or As. Should Respond panic, the response is a
 // bare 500 without a body, which cannot fail the same way, and the server
 // keeps serving.
 func respond(h *prblm.Handler, r *http.Request, err error) (res prblm.Response, ok bool) {

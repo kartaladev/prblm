@@ -50,7 +50,11 @@
 // library that wraps prblm adds its own hook with [AddErrorHook], which OnError
 // never replaces. Mappers, describers, enrichers and the hooks may panic
 // without breaking the response: the panic of consumer code is reported to the
-// hooks as a [*PanicError], and a panicking hook does not stop the others.
+// hooks as a [*PanicError], and a panicking hook does not stop the others. So
+// may the Is and As methods of the error being answered, which often comes from
+// a dependency: the resolution step that meets the panic counts as no match. An
+// error chain that loops back on itself is not detected, though: resolving it
+// never returns, or overflows the stack, as [errors.Is] does.
 //
 // # Problem types
 //
