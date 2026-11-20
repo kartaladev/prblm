@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/gin-gonic/gin v1.12.0
-	github.com/kartaladev/prblm v0.2.0
+	github.com/kartaladev/prblm v0.3.0
 )
 
 require (
@@ -38,8 +38,3 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
-
-// The adapter uses the unreleased core (internal/errwalk and
-// internal/statushint) until the core is tagged; RELEASING.md says to drop
-// this line before tagging the adapter.
-replace github.com/kartaladev/prblm => ../..
