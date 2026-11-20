@@ -398,7 +398,7 @@ func wrapN(err error, n int) error {
 	return err
 }
 
-// error-chain-walk / Scenario: Budget boundary, the adapter rows. The status
+// error-chain-walk / Scenario: Adapter status hints cost nothing. The status
 // hint of c.AbortWithError is not an entry of the error's chain, so it costs
 // nothing of the budget: a 1,000-entry error is walked to its end, where a
 // mapper recognizes ErrLocked, and a 1,001-entry error still aborts.
