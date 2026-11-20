@@ -196,7 +196,7 @@ When an error chain matches several sentinels, the first one found in `errors.Is
 | `context.DeadlineExceeded` | 504 | (none) |
 
 ### Requirement: Degenerate errors never break resolution
-Resolving nil, typed-nil and faulty custom errors SHALL NOT panic. A custom `Is` method that panics SHALL be contained like any faulty consumer code and reported to the hook.
+Resolving nil, typed-nil and faulty custom errors SHALL NOT panic or hang. A typed nil SHALL be skipped without calling its methods. A custom `Is` method that panics SHALL abort the walk of the chain: the response SHALL be the safe 500, and the hook SHALL receive one `ErrUnwalkableError` note, then the returned error.
 
 #### Scenario: Degenerate inputs
 - **Given** a handler with a hook that records its calls
@@ -210,7 +210,10 @@ Resolving nil, typed-nil and faulty custom errors SHALL NOT panic. A custom `Is`
 | `nil` | nothing written | (nothing) |
 | `prblm.WithStatus(nil, 404)` | nothing written | (nothing) |
 | a typed-nil `*MyError` (no `Is` method) stored in an `error` | a 500 problem without detail | the returned error |
-| an error whose `Is` method panics | a 500 problem without detail | one or more panic errors, then the returned error |
+| a typed-nil `*MyError` whose `Is` method has a value receiver | a 500 problem without detail | the returned error |
+| `errors.Join((*MyError)(nil), prblm.ErrNotFound)` | a 404 problem with detail `The requested resource was not found.` | the returned error |
+| an error whose `Is` method panics | a 500 problem without detail | an `ErrUnwalkableError` note with reason `panic`, then the returned error |
+| an error whose `Unwrap() error` returns itself and whose `Is` method reports `prblm.ErrNotFound` | a 500 problem without detail | an `ErrUnwalkableError` note with reason `budget`, then the returned error |
 
 ### Requirement: Sentinels are safe under concurrent use
 Sentinel values and their built-in mappings SHALL be shared read-only, so concurrent requests returning the same sentinel get independent responses.
