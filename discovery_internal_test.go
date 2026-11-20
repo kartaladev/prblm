@@ -123,7 +123,7 @@ func TestDiscovery_RenderedOnFirstUse(t *testing.T) {
 			// panics, nothing else.
 			req := Request{Method: "GET", Path: "/v1/vessels/7"}
 			h.Respond(t.Context(), req, &PanicError{Value: "boom"})
-			h.respondPanic(t.Context(), req, &PanicError{Value: "boom"})
+			h.RespondPanic(t.Context(), req, &PanicError{Value: "boom"})
 
 			if n := h.discovery.renders.Load(); n != 0 {
 				t.Fatalf("rendered %d times before any use of discovery, want 0", n)

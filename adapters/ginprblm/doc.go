@@ -100,9 +100,12 @@
 // The problem semantics are the core's, unchanged: an error no mapper
 // recognizes becomes a 500 problem without its text, the instance is the
 // request path without the query string, and the format is JSON unless the
-// client prefers XML. Should the core itself panic while resolving an error
-// (for example on an error whose Unwrap method panics), the response is a
-// bare 500 without a body and the engine keeps serving.
+// client prefers XML. An error whose chain cannot be walked (it loops back on
+// itself, or one of its methods panics) is answered with the safe 500 problem
+// within its bounded walk, and the hooks receive an
+// [prblm.ErrUnwalkableError] note first. Should the core itself panic while
+// resolving an error all the same, the response is a bare 500 without a body
+// and the engine keeps serving.
 //
 // A configuration mistake, such as an invalid option, is a programming
 // mistake: [Middleware] and [Recovery] panic when they are created, so it

@@ -31,8 +31,10 @@ The core also has micro-benchmarks of its hot paths:
 
 | Benchmark | Cases | Source |
 |---|---|---|
-| `BenchmarkResolve` | `mapped`, `fallback` | `bench_test.go` |
+| `BenchmarkResolve` | `mapped`, `fallback`, `wrapped` (the unmapped error wrapped twice with `fmt.Errorf("%w")`, a walk of 3 entries), `unwalkable` (an error whose `Unwrap` returns itself: the walk aborts at the budget, and the hook gets the note) | `bench_test.go` |
+| `BenchmarkNew` | `entries=1`, `entries=4`, `entries=16` (the error chain walk of `internal/errwalk`) | `internal/errwalk/errwalk_test.go` |
 | `BenchmarkRespond` | `json`, `xml` | `bench_test.go` |
+| `BenchmarkMergeInto` | `empty` (the response writer's header is empty, as in the request-path cases), `middleware` (it already holds four headers middleware sets, none of them the response's) | `bench_test.go` |
 | `BenchmarkNegotiate` | `empty`, `any` (`*/*`), `json` (`application/json`), `browser`, `xml`, `malformed` (the `Accept` header) | `respond_internal_test.go` |
 | `BenchmarkIsSubtype` | | `namespace_internal_test.go` |
 | `BenchmarkResolveType` | `resolved`, `kept`, `invalid`, `undocumented` | `namespace_internal_test.go` |
@@ -60,8 +62,10 @@ go test -run '^$' -bench . -benchtime 1x ./...
 (cd adapters/fiberprblm && go test -run '^$' -bench . -benchtime 1x ./...)
 ```
 
-The adapters also run with `GOWORK=off`, against the released core in their `go.mod`, the
-configuration the published numbers are measured in:
+The adapters also run with `GOWORK=off`, the configuration the published numbers are measured in.
+That runs them against the core their `go.mod` resolves: the released core it requires or, while it
+replaces the core with `../..` (an adapter that needs an unreleased core), the core in the
+repository:
 
 ```sh
 (cd adapters/ginprblm && GOWORK=off go test -run '^$' -bench . -benchtime 1x ./...)
@@ -101,7 +105,8 @@ Numbers are measured only on an idle machine; a loaded machine gives noisy, unre
 Run each module with `GOWORK=off`, so it is measured as released, against the dependency versions in
 its own `go.mod`. An adapter module is then measured with the released core its `go.mod` requires,
 not the core in the repository, so the published adapter tables are measured again after every core
-release. To compare a change to the core in the adapters before it is released, run the adapters in
+release. While an adapter's `go.mod` replaces the core with `../..`, it is measured with the core in
+the repository instead. To compare a change to the core in the adapters before it is released, run the adapters in
 workspace mode (without `GOWORK=off`), old against new. The raw output goes to
 `bench/results/<module>-<yyyy-mm-dd>-<short-sha>.txt`, where `<module>` is `core` for the root
 module and the module's directory name for the others (`ginprblm`, `fiberprblm`). From the
@@ -300,3 +305,34 @@ benchstat bench/results/compare-2026-11-18-headers/core-{d6dd793,65140e6}.txt
 
 `d6dd793` made every problem case 3% to 8% faster in every adapter and slowed none; discovery pages
 are built by `newResponse` once, not per request. `Respond/json` went from 979.9n to 903.0n (−7.85%).
+
+#### Bounded error walk against v0.2.1
+
+The raw files are in `bench/results/compare-2026-11-20-bounded-error-walk/`: `run1/` compares
+v0.2.1 (`5742e04`) with the change as first written (`eee7756`); `run2/` adds `b2fd3ad` (the walk in
+the 112-byte size class) and `adfa01f` (a `MergeInto` length filter, dropped and not kept in the history; its request path is
+the final code, since every request-path case merges into an empty header); `merge/` compares
+`MergeInto` alone, with the scratch benchmark that measured it.
+
+```sh
+benchstat bench/results/compare-2026-11-20-bounded-error-walk/run2/core-{5742e04,eee7756,b2fd3ad,adfa01f-length-filter}.txt
+```
+
+| Case, time/op | `5742e04` (v0.2.1) | `eee7756` | final |
+|---|---|---|---|
+| net/http `mapped-json` | 1.177µ ± 1% | 1.218µ ± 1% (+3.48%, p=0.000) | 1.184µ ± 0% (+0.55%, p=0.024) |
+| net/http `fallback-500` | 1.258µ ± 1% | 1.315µ ± 1% (+4.53%, p=0.000) | 1.282µ ± 1% (+1.83%, p=0.000) |
+| gin `mapped-json` | 1.300µ ± 1% | 1.357µ ± 1% (+4.42%, p=0.000) | 1.319µ ± 1% (+1.46%, p=0.001) |
+| gin `fallback-500` | 1.388µ ± 1% | 1.450µ ± 1% (+4.47%, p=0.001) | 1.415µ ± 1% (+1.98%, p=0.001) |
+| fiber `mapped-json` | 1.712µ ± 1% | 1.685µ ± 1% (−1.61%, p=0.000) | 1.711µ ± 1% (~) |
+| fiber `fallback-500` | 1.797µ ± 1% | 1.786µ ± 2% (−0.64%, p=0.007) | 1.803µ ± 1% (~) |
+| `Resolve/mapped` | 166.8n ± 1% | 195.2n ± 1% (+17.09%) | 179.3n ± 1% (+7.53%) |
+| `MergeInto`, empty header | 151.8n ± 1% | 149.0n ± 1% (−1.84%) | 143.2n ± 1% (−5.63%) |
+| `MergeInto`, 3 headers set | 183.3n ± 0% | 240.9n ± 1% (+31.42%) | 242.2n ± 1% (+32.16%) |
+
+Code that did not change moved in the same run (`Negotiate/json` +1.97%, `Wrap/baseline` +1.37%),
+so about 1.5–2% of each row is layout drift. A problem response allocates as often as in v0.2.1 and
+112 bytes more (128 for a matched problem): the walk, which a resolution keeps on the heap, and 16
+bytes of `Problem`. `MergeInto` into a filled header pays for folding non-canonical spellings of the
+response's header names, about 30 ns of which is ranging over the header. The remainder was accepted;
+the openspec change `bounded-error-walk` (design, "Measurement against v0.2.1") records why.

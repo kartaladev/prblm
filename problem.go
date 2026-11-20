@@ -70,6 +70,9 @@ type Problem struct {
 	// cause is the error behind the problem. It is reachable through
 	// [errors.Unwrap] and is never serialized.
 	cause error
+	// replaced lists the canonical names of the headers marked with
+	// [WithReplacedHeader], each once. It is never serialized.
+	replaced []string
 	// Status is the HTTP status code for this occurrence.
 	Status int
 }
@@ -204,6 +207,39 @@ func WithHeader(name, value string) Field {
 	}
 }
 
+// WithReplacedHeader adds a header, like [WithHeader], and marks it to
+// replace any value the handler or a middleware already set on the response.
+//
+// By default a problem's Cache-Control yields to one already on the
+// response, and its Vary adds to the names already there (see
+// [Response.MergeInto]): the handler knows best how its responses may be
+// cached. Some problems must win instead. A problem that reveals
+// per-user state, for example, must force no-store even when the route was
+// marked public, or a shared cache would replay it to other users:
+//
+//	var ErrSessionExpired = prblm.New(http.StatusUnauthorized,
+//		prblm.WithReplacedHeader("Cache-Control", "no-store"))
+//
+// The name is canonicalized, and marking the same name twice adds both
+// values but keeps one mark. A replaced Vary still lists Accept, and
+// Content-Type and Content-Length stay controlled by the library whatever
+// the problem sets. The mark is copied with the problem, so a package-level
+// problem keeps it on every request, and it is never part of the document.
+// It covers only the values in [Problem.Header]: deleting the header later
+// leaves the mark with nothing to replace. When encoding the problem fails,
+// the minimal fallback is sent without the problem's headers or marks.
+func WithReplacedHeader(name, value string) Field {
+	name = http.CanonicalHeaderKey(name)
+
+	return func(p *Problem) {
+		WithHeader(name, value)(p)
+
+		if !slices.Contains(p.replaced, name) {
+			p.replaced = append(p.replaced, name)
+		}
+	}
+}
+
 // WithExt sets an extension member, like [Problem.Set]. It panics when name
 // is invalid, so that a mistake in a package-level problem shows up when the
 // program starts rather than when a request fails.
@@ -248,12 +284,14 @@ func (p *Problem) Ext(name string) (any, bool) {
 	return v, ok
 }
 
-// clone returns a copy of p that shares no map with it. Extension values
-// themselves are not copied.
+// clone returns a copy of p that shares no map or slice with it, so marking
+// a header on the copy never appends into p. Extension values themselves
+// are not copied.
 func (p *Problem) clone() *Problem {
 	c := *p
 	c.ext = maps.Clone(p.ext)
 	c.Header = p.Header.Clone()
+	c.replaced = slices.Clone(p.replaced)
 
 	return &c
 }

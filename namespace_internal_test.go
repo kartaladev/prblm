@@ -293,3 +293,27 @@ func TestTypeCache_NoAllocs(t *testing.T) {
 		t.Errorf("resolving a cached sub-type allocates %v times, want 0", allocs)
 	}
 }
+
+// store keeps the first type stored for a sub-type, as when another request
+// stored it first, and stores nothing once the cache is full. resolve only
+// meets these branches when requests race, so they are driven directly.
+func TestTypeCache_StoreSkips(t *testing.T) {
+	t.Parallel()
+
+	var c typeCache
+
+	c.store("s", "/first/s")
+	c.store("s", "/second/s")
+
+	if typ, _ := c.load("s"); typ != "/first/s" {
+		t.Errorf("type = %q, want the first one stored", typ)
+	}
+
+	for i := range maxCachedSubtypes {
+		c.store("x"+strconv.Itoa(i), "/x")
+	}
+
+	if n := c.len(); n != maxCachedSubtypes {
+		t.Errorf("cached %d sub-types, want the bound %d", n, maxCachedSubtypes)
+	}
+}

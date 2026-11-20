@@ -23,21 +23,45 @@ import (
 // [http.ErrAbortHandler] has no meaning in fiber, so it is recovered like
 // any other panic value.
 //
+// A panic is told apart by the handlers not returning, not by what recover
+// returns, so panic(nil) is answered and reported too under
+// GODEBUG=panicnil=1, where recover returns nil.
+//
+// A [runtime.Goexit] in a handler (t.FailNow in a test) cannot be answered:
+// fasthttp writes the response, and fiber calls the error handler, on the
+// handler's goroutine once the handler returns, and Goexit ends that
+// goroutine first. The client gets no answer, and the hooks hear nothing;
+// the app keeps serving other requests.
+//
 // Recovery is opt-in; without it the library does not recover panics.
 // Recovery takes no problem handler, because it renders nothing itself.
 func Recovery() fiber.Handler {
 	return func(c fiber.Ctx) (err error) {
-		defer func() {
-			if v := recover(); v != nil {
-				// The panicking frames are still on the stack while a
-				// deferred function runs, so the stack shows where the
-				// panic happened.
-				err = recoveredError{pe: &prblm.PanicError{Value: v, Stack: debug.Stack()}}
-			}
-		}()
+		returned := false
 
-		return c.Next()
+		defer recoverPanic(&err, &returned)
+
+		err = c.Next()
+		returned = true
+
+		return err
 	}
+}
+
+// recoverPanic is deferred by Recovery: it recovers a panic in the handlers
+// into *err. *returned, set once the handlers returned normally, tells a
+// panic apart rather than recover's result, so panic(nil) is answered too
+// under GODEBUG=panicnil=1, where recover returns nil. A runtime.Goexit also
+// leaves it unset, as in the core's Recover, but nothing receives the error:
+// Goexit ends the goroutine before fiber can call the error handler.
+func recoverPanic(err *error, returned *bool) {
+	if *returned {
+		return
+	}
+
+	// The panicking frames are still on the stack while a deferred function
+	// runs, so the stack shows where the panic happened.
+	*err = recoveredError{pe: &prblm.PanicError{Value: recover(), Stack: debug.Stack()}}
 }
 
 // recoveredError carries a recovered panic to the error handler. Its message

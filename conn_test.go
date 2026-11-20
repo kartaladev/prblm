@@ -48,3 +48,33 @@ func TestRecover_Broken(t *testing.T) {
 		})
 	}
 }
+
+// panic-recovery / Scenario: Panic response without writing (the broken
+// connection rows): nothing is to be written, and the hooks receive the
+// panic error with a nil problem.
+func TestRespondPanic_Broken(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value error
+	}{
+		{name: "broken pipe", value: fmt.Errorf("write: %w", syscall.EPIPE)},
+		{name: "connection reset", value: syscall.ECONNRESET},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			pe := &prblm.PanicError{Value: tt.value}
+			if a := respondPanicWithin(t, prblm.NewHandler(prblm.OnError(r.hook)), pe); a.isWrite {
+				t.Errorf("RespondPanic = %d %s to write, want nothing", a.res.Status, a.res.Body)
+			}
+
+			assertHookCalls(t, r.recorded(), pe, 0, 0)
+		})
+	}
+}

@@ -9,7 +9,9 @@ import (
 // PanicError is a recovered panic, reported to the hooks ([OnError] and
 // [AddErrorHook]). It never reaches the client.
 type PanicError struct {
-	// Value is the value passed to panic.
+	// Value is the value passed to panic. It is nil when the code called
+	// panic(nil) under GODEBUG=panicnil=1, and a *runtime.PanicNilError
+	// for panic(nil) otherwise.
 	Value any
 	// Stack is the stack trace captured where the panic was recovered,
 	// which still contains the panicking frames.
@@ -34,12 +36,28 @@ func (e *PanicError) Unwrap() error {
 // recovered and reported to the hooks as a *PanicError, and safeCall then
 // returns the zero value, so faulty consumer code cannot break the response.
 // The stack is only captured when a hook will receive it.
-func safeCall[T any](ctx context.Context, h *Handler, fn func() T) T {
+//
+// The returned flag, not recover's result, tells a panic apart, so panic(nil) is
+// reported too under GODEBUG=panicnil=1, where recover returns nil: the
+// report is then a *PanicError with a nil Value. A runtime.Goexit in fn also
+// leaves the flag unset and is reported with a nil Value; Goexit in consumer
+// code is t.FailNow in a test, so the spurious report is harmless.
+func safeCall[T any](ctx context.Context, h *Handler, fn func() T) (result T) {
+	returned := false
+
 	defer func() {
-		if v := recover(); v != nil && h.isReporting(ctx) {
+		if returned {
+			return
+		}
+
+		v := recover()
+		if h.isReporting(ctx) {
 			h.callHook(ctx, &PanicError{Value: v, Stack: debug.Stack()}, nil)
 		}
 	}()
 
-	return fn()
+	result = fn()
+	returned = true
+
+	return result
 }

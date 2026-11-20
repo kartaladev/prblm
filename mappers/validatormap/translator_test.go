@@ -7,6 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -349,3 +352,90 @@ func TestMapper_TranslatorAbort(t *testing.T) {
 	p := mapper.MapError(t.Context(), err)
 	t.Errorf("MapError returned %v, want the http.ErrAbortHandler panic to propagate", p)
 }
+
+// validation-error-mapping / Scenario: Panicking translations (the
+// panic(nil) rows). A panic is told apart by the call not returning, not by
+// what recover returns, so panic(nil) is reported to the hook in every mode:
+// as a *runtime.PanicNilError by default, and with a nil value under
+// GODEBUG=panicnil=1, where recover returns nil. The test runs itself again
+// in a child process in that mode.
+func TestMapper_TranslatorPanicNil(t *testing.T) {
+	t.Parallel()
+
+	panicNil := strings.Contains(os.Getenv("GODEBUG"), "panicnil=1")
+	if !panicNil {
+		name := t.Name()
+
+		t.Run("GODEBUG=panicnil=1", func(t *testing.T) {
+			t.Parallel()
+
+			//nolint:gosec // os.Args[0] is this test binary, run again with fixed arguments.
+			cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+name+"$", "-test.v")
+
+			cmd.Env = append(os.Environ(), "GODEBUG=panicnil=1")
+
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("under GODEBUG=panicnil=1: %v\n%s", err, out)
+			}
+		})
+	}
+
+	uni := ut.New(en.New(), en.New())
+	english, _ := uni.GetTranslator("en")
+
+	v := newValidator()
+
+	err := v.RegisterTranslation("required", english,
+		func(trans ut.Translator) error { return trans.Add("required", "{0} is required", false) },
+		func(ut.Translator, validator.FieldError) string { panic(nilValue) },
+	)
+	if err != nil {
+		t.Fatalf("RegisterTranslation() error = %v", err)
+	}
+
+	type SignupRequest struct {
+		Name string `json:"name" validate:"required"`
+	}
+
+	tests := []struct {
+		name       string
+		translator func(context.Context) ut.Translator
+	}{
+		{name: "translator panics with nil", translator: func(context.Context) ut.Translator { panic(nilValue) }},
+		{name: "translation panics with nil", translator: func(context.Context) ut.Translator { return english }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var panics []*prblm.PanicError
+
+			h := prblm.NewHandler(
+				prblm.WithMappers(jsonMapper(validatormap.WithTranslator(tt.translator))),
+				prblm.OnError(recordPanics(&panics)),
+			)
+
+			got := serve(t, h, "", v.Struct(SignupRequest{}))
+			if got.status != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want 422", got.status)
+			}
+
+			if len(panics) != 1 {
+				t.Fatalf("hook found %d panic errors, want the panic(nil) reported once", len(panics))
+			}
+
+			if _, ok := panics[0].Value.(*runtime.PanicNilError); panicNil && panics[0].Value != nil || !panicNil && !ok {
+				t.Errorf("panic value = %#v, want the panic(nil) value of this mode (panicnil=1: %t)", panics[0].Value, panicNil)
+			}
+
+			if want := `[{"detail":"failed validation: required","pointer":"#/name"}]`; errorsMember(t, got.body) != want {
+				t.Errorf("errors = %s, want %s", errorsMember(t, got.body), want)
+			}
+		})
+	}
+}
+
+// nilValue is nil: panic(nilValue) is panic(nil), without the vet warning a
+// literal nil gets.
+var nilValue any

@@ -2,10 +2,10 @@ package fiberprblm
 
 import (
 	"bytes"
-	"errors"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/kartaladev/prblm"
+	"github.com/kartaladev/prblm/internal/errwalk"
 )
 
 // Discovery returns fiber middleware, for app.Use, that reports every
@@ -59,8 +59,23 @@ func escapedPath(c fiber.Ctx) string {
 // error alone cannot tell them apart; c.Matched() can, because it is set
 // only when an endpoint route matched. A path that has a route only for
 // another method gets fiber.ErrMethodNotAllowed instead, so it is not one.
+//
+// A panic, such as one [Recovery] recovered, is never route-not-found,
+// whatever its value wraps: it gets the safe 500 and reaches the hooks. The
+// [*prblm.PanicError] is found by its type alone, so no method runs for it.
+//
+// The walk is bounded: a chain this walk cannot finish is not
+// route-not-found, and this walk reports nothing. The core then answers the
+// error, with the safe 500 and a note when its own walk cannot finish
+// either, as usual otherwise.
 func isRouteNotFound(c fiber.Ctx, err error) bool {
-	return !c.Matched() && errors.Is(err, fiber.ErrNotFound)
+	if c.Matched() {
+		return false
+	}
+
+	w := errwalk.New(err)
+
+	return !errwalk.Has[*prblm.PanicError](w) && w.Is(fiber.ErrNotFound) >= 0
 }
 
 // serveDiscovery answers c with the core's discovery response, exactly as

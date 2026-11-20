@@ -44,6 +44,9 @@ type Response struct {
 	Header http.Header
 	// Body is the encoded problem document.
 	Body []byte
+	// replaced lists the canonical names of the headers the problem marked
+	// with [WithReplacedHeader]; MergeInto replaces them in its destination.
+	replaced []string
 	// Status is the HTTP status code.
 	Status int
 }
@@ -55,6 +58,19 @@ type Response struct {
 // Cache-Control already in dst is kept, because the handler already chose how
 // its response may be cached.
 //
+// A header the problem marked with [WithReplacedHeader] replaces dst's
+// values in every case, Vary and Cache-Control included: the problem's author
+// decided that this problem must win, for example to force no-store on a
+// route the handler made cacheable. A replaced Vary still lists Accept,
+// because the response's own Vary always does.
+//
+// A handler may have written dst's map directly, under a key that is not
+// in canonical form, such as "cache-control": net/http sends such a key as
+// written, so it is the same header to the client. The rules apply to every
+// spelling of a response header's name: its values count as dst's, after
+// those under the canonical name, and the merged values go under the
+// canonical name alone. Keys of other headers are left as they are.
+//
 // The values are copied, so dst never shares storage with r. A nil dst has
 // nothing to merge into, and a nil r.Header has nothing to merge: both leave
 // dst unchanged.
@@ -63,12 +79,20 @@ func (r Response) MergeInto(dst http.Header) {
 		return
 	}
 
+	foldSpellings(dst, func(name string) bool {
+		_, ok := r.Header[name]
+
+		return ok
+	})
+
 	for name, values := range r.Header {
-		switch name {
-		case "Vary":
+		switch {
+		case slices.Contains(r.replaced, name):
+			dst[name] = slices.Clone(values)
+		case name == "Vary":
 			addVary(dst, values...)
-		case "Cache-Control":
-			if len(dst.Values(name)) == 0 {
+		case name == "Cache-Control":
+			if len(dst[name]) == 0 {
 				dst[name] = slices.Clone(values)
 			}
 		default:
@@ -134,15 +158,19 @@ func negotiateFormat(accept string) *format {
 
 // newResponse builds a problem response. It takes ownership of header,
 // which must not be shared; Respond passes the header of the problem that
-// Resolve copied for this request. The library owns Content-Type and
-// Content-Length, so a problem's own values for them are replaced: a wrong
-// length would corrupt the response.
+// Resolve copied for this request. replaced lists the header names the
+// problem marked to replace (nil when nothing is marked, as for the
+// fallback); the response only reads it, and keeps only the marks whose
+// header the problem still has (see presentOnly). The library owns
+// Content-Type and Content-Length, so a problem's own values for them are
+// replaced: a wrong length would corrupt the response.
 //
 // Every problem response varies on Accept, and is not stored by caches
 // unless the problem sets its own Cache-Control: an error is a statement
 // about one moment, and an intermediary replaying it would hide recovery.
-func newResponse(status int, header http.Header, mediaType string, body []byte) Response {
+func newResponse(status int, header http.Header, replaced []string, mediaType string, body []byte) Response {
 	header = canonicalize(header)
+	replaced = presentOnly(replaced, header)
 
 	// The values share one array instead of one per header, as net/http
 	// does when it parses headers. Each is capped at its length, so an
@@ -161,7 +189,22 @@ func newResponse(status int, header http.Header, mediaType string, body []byte) 
 		header["Cache-Control"] = values[3:4:4]
 	}
 
-	return Response{Status: status, Header: header, Body: body}
+	return Response{Status: status, Header: header, Body: body, replaced: replaced}
+}
+
+// presentOnly returns the names in replaced that header has values for: a
+// mark whose header was deleted from the problem replaces nothing, so the
+// Vary and Cache-Control defaults newResponse fills in then merge by the
+// default rules instead of replacing the handler's values. It returns
+// replaced itself when header has them all, the common case, and a new slice
+// otherwise, so the problem's own list is never changed.
+func presentOnly(replaced []string, header http.Header) []string {
+	isAbsent := func(name string) bool { return len(header[name]) == 0 }
+	if !slices.ContainsFunc(replaced, isAbsent) {
+		return replaced
+	}
+
+	return slices.DeleteFunc(slices.Clone(replaced), isAbsent)
 }
 
 // canonicalize moves the values of non-canonical keys in h to their
@@ -173,14 +216,43 @@ func canonicalize(h http.Header) http.Header {
 		return make(http.Header)
 	}
 
-	for name, values := range h {
-		if canonical := http.CanonicalHeaderKey(name); canonical != name {
-			delete(h, name)
-			h[canonical] = append(h[canonical], values...)
+	foldSpellings(h, func(string) bool { return true })
+
+	return h
+}
+
+// foldSpellings moves the values h holds under a non-canonical key to the
+// canonical key, for each canonical name folds accepts, and deletes that key.
+// They go after the values already under the canonical key, in the sorted
+// order of the keys, so the result is deterministic, and never share storage
+// with them. A key that is not a valid field name has no canonical form and
+// is left alone, as net/http leaves it.
+//
+// It runs on every response, and keys are almost always canonical, so the
+// common case is one pass over h that allocates nothing:
+// [http.CanonicalHeaderKey] returns a canonical key as it is.
+func foldSpellings(h http.Header, folds func(name string) bool) {
+	// An empty h, as before a handler writes any header, has nothing to
+	// fold; returning at once saves ranging over the map.
+	if len(h) == 0 {
+		return
+	}
+
+	var spellings []string
+
+	for key := range h {
+		if name := http.CanonicalHeaderKey(key); name != key && folds(name) {
+			spellings = append(spellings, key)
 		}
 	}
 
-	return h
+	slices.Sort(spellings)
+
+	for _, key := range spellings {
+		name := http.CanonicalHeaderKey(key)
+		h[name] = slices.Concat(h[name], h[key])
+		delete(h, key)
+	}
 }
 
 // addVary adds each field name listed in values to the Vary header of h,

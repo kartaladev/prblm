@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime/debug"
 
 	"github.com/kartaladev/prblm"
 )
@@ -112,6 +113,45 @@ func ExampleHandler_Recover() {
 	// Output:
 	// level=ERROR msg="handler panicked" value="vessel cache not initialized"
 	// 500
+	// {"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}
+}
+
+func ExampleHandler_RespondPanic() {
+	h := prblm.NewHandler(prblm.OnError(func(_ context.Context, err error, p *prblm.Problem) {
+		if pe, ok := errors.AsType[*prblm.PanicError](err); ok {
+			fmt.Println("hook:", pe.Value, p.Status)
+		}
+	}))
+
+	// serve is what the recovery middleware of a framework adapter does: it
+	// recovers the panic in its deferred function, where the stack still
+	// holds the panicking frames, and writes the response RespondPanic
+	// returns, unless there is nothing to write.
+	serve := func(req prblm.Request, handler func()) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				return
+			}
+
+			res, ok := h.RespondPanic(context.Background(), req, &prblm.PanicError{Value: v, Stack: debug.Stack()})
+			if !ok {
+				return
+			}
+
+			fmt.Println(res.Status, res.Header.Get("Content-Type"))
+			fmt.Println(string(res.Body))
+		}()
+
+		handler()
+	}
+
+	serve(prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7"}, func() {
+		panic("vessel cache not initialized")
+	})
+	// Output:
+	// hook: vessel cache not initialized 500
+	// 500 application/problem+json
 	// {"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}
 }
 
@@ -251,6 +291,35 @@ func ExampleNew() {
 	// {"type":"https://example.com/probs/out-of-credit","title":"You do not have enough credit.","status":403,"detail":"Your current balance is 30, but that costs 50.","accounts":["/account/12345","/account/67890"],"balance":30}
 	// 3600
 	// You do not have enough credit.: Your current balance is 30, but that costs 50.
+}
+
+func ExampleWithReplacedHeader() {
+	// The session problem reveals per-user state, so no cache may store it,
+	// even on a route the handler made publicly cacheable.
+	errSessionExpired := errors.New("session expired")
+	sessionExpired := prblm.New(http.StatusUnauthorized,
+		prblm.WithReplacedHeader("Cache-Control", "no-store"),
+	)
+
+	h := prblm.NewHandler(prblm.WithMappers(
+		prblm.Is(errSessionExpired, func(error) *prblm.Problem { return sessionExpired }),
+	))
+
+	handler := h.Wrap(func(w http.ResponseWriter, _ *http.Request) error {
+		w.Header().Set("Cache-Control", "public, max-age=600")
+
+		return errSessionExpired
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/v1/catalog", http.NoBody)
+	handler.ServeHTTP(rec, req)
+
+	fmt.Println(rec.Code)
+	fmt.Println(rec.Header().Get("Cache-Control"))
+	// Output:
+	// 401
+	// no-store
 }
 
 func ExampleProblem_MarshalXML() {
@@ -442,6 +511,32 @@ func ExampleOnError() {
 	fmt.Println(string(res.Body))
 	// Output:
 	// answered 500 for: pq: connection refused
+	// {"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}
+}
+
+// flakyDriverError comes from a dependency whose As method panics.
+type flakyDriverError struct{}
+
+func (flakyDriverError) Error() string { return "driver: connection reset" }
+func (flakyDriverError) As(any) bool   { panic("driver bug") }
+
+func ExampleErrUnwalkableError() {
+	h := prblm.NewHandler(prblm.OnError(func(_ context.Context, err error, p *prblm.Problem) {
+		// The note comes first. errors.Is is safe on the note itself.
+		if errors.Is(err, prblm.ErrUnwalkableError) {
+			fmt.Printf("note with %d: %v\n", p.Status, err)
+
+			return
+		}
+
+		fmt.Printf("answered %d for: %v\n", p.Status, err)
+	}))
+
+	res, _ := h.Respond(context.Background(), prblm.Request{Path: "/v1/vessels/7"}, flakyDriverError{})
+	fmt.Println(string(res.Body))
+	// Output:
+	// note with 500: prblm: error chain cannot be walked: panic: string
+	// answered 500 for: driver: connection reset
 	// {"title":"Internal Server Error","status":500,"instance":"/v1/vessels/7"}
 }
 

@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kartaladev/prblm"
 	"github.com/kartaladev/prblm/adapters/ginprblm"
+	"github.com/kartaladev/prblm/internal/statushint"
 )
 
 // gin-adapter / Scenario: Options configure the middleware.
@@ -262,25 +264,22 @@ func TestMiddleware_FaultyConsumer(t *testing.T) {
 	}
 }
 
-// panickyUnwrapError is an error whose Unwrap panics. Core v0.2.0 walks its
-// chain outside its guards, so Respond panics on it, and the adapter's own
-// guard answers a bare 500 (design D2, TestRespond_Panics). Later cores
-// contain the panic and answer the safe 500 problem.
+// panickyUnwrapError is an error whose Unwrap panics. The core's bounded
+// walk contains the panic and answers the safe 500 problem.
 type panickyUnwrapError struct{}
 
 func (panickyUnwrapError) Error() string { return "panicky" }
 func (panickyUnwrapError) Unwrap() error { panic("unwrap") }
 
-// An error whose Unwrap panics gets a 500 without the panic value, and the
-// engine keeps serving, whichever core the adapter is built against.
+// An error whose Unwrap panics gets the safe 500 problem without the panic
+// value, and the engine keeps serving.
 func TestMiddleware_FaultyConsumer_UnwrapPanics(t *testing.T) {
 	t.Parallel()
 
 	engine := gin.New()
 	engine.Use(ginprblm.Middleware())
 	engine.GET("/x", func(c *gin.Context) {
-		// c.Error itself walks the chain, so record the error directly.
-		c.Errors = append(c.Errors, &gin.Error{Err: panickyUnwrapError{}, Type: gin.ErrorTypePrivate})
+		record(c, panickyUnwrapError{})
 	})
 	engine.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
@@ -290,13 +289,44 @@ func TestMiddleware_FaultyConsumer_UnwrapPanics(t *testing.T) {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
 
-	// A bare 500 with core v0.2.0, the safe 500 problem with later cores.
-	if body := rec.Body.String(); body != "" && body != `{"title":"Internal Server Error","status":500,"instance":"/x"}` {
-		t.Errorf("body = %q, want empty or the safe 500 problem", body)
+	if body := rec.Body.String(); body != `{"title":"Internal Server Error","status":500,"instance":"/x"}` {
+		t.Errorf("body = %q, want the safe 500 problem", body)
 	}
 
 	if rec := serve(t, engine, get(t, "/ok")); rec.Code != http.StatusOK {
 		t.Errorf("follow-up status = %d, want 200", rec.Code)
+	}
+}
+
+// error-chain-walk / Scenario: Cycles and fan-out (gin rows). Within a
+// second, the client receives the safe 500 problem, and the hook receives an
+// ErrUnwalkableError note with reason budget, then the error.
+func TestMiddleware_Unwalkable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "unwrap returns itself", err: &loopError{}},
+		{name: "join holds itself", err: joinCycle(t)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var hook hookRecorder
+
+			engine := gin.New()
+			engine.Use(ginprblm.Middleware(hook.option()))
+			engine.GET("/v1/vessels/7", func(c *gin.Context) { record(c, tt.err) })
+
+			rec := serveWithin(t, engine, get(t, "/v1/vessels/7"))
+
+			assertSafe500(t, rec, true)
+			assertNoted(t, &hook, "budget", nil, isSame(tt.err))
+		})
 	}
 }
 
@@ -373,6 +403,28 @@ func TestMiddleware_NilRecordedError(t *testing.T) {
 
 	if ct := rec.Header().Get("Content-Type"); ct != "" {
 		t.Errorf("Content-Type = %q, want none", ct)
+	}
+}
+
+// error-chain-walk / Scenario: Typed-nil adapter hint wrapper. A recorded
+// error that is a nil of the hint wrapper's type (a consumer can make one
+// with reflect.Zero from the error its hook receives) gets the core's safe
+// 500 and one hook call, never a bare status. It is appended directly: gin's
+// own c.Error panics on it first, in its errors.As.
+func TestMiddleware_TypedNilStatusHint(t *testing.T) {
+	t.Parallel()
+
+	hook := &hookRecorder{}
+	engine := newEngine(func(c *gin.Context) { record(c, (*statushint.Error)(nil)) }, hook.option())
+
+	rec := serve(t, engine, get(t, "/x"))
+
+	if ct := rec.Header().Get("Content-Type"); rec.Code != http.StatusInternalServerError || ct != "application/problem+json" {
+		t.Errorf("response = %d %q %q, want 500 application/problem+json", rec.Code, ct, rec.Body.String())
+	}
+
+	if got := len(hook.received()); got != 1 {
+		t.Errorf("hook calls = %d, want 1", got)
 	}
 }
 
@@ -504,6 +556,142 @@ func TestMiddleware_HostHeaders(t *testing.T) {
 	}
 }
 
+// problem-response / Scenarios: Replaced headers win over existing ones
+// (gin rows), plus Vary, the response that falls back and the deleted marked
+// header; A handler header under a non-canonical key.
+func TestMiddleware_ReplacedHeader(t *testing.T) {
+	t.Parallel()
+
+	errUnavailable := errors.New("unavailable")
+
+	tests := []struct {
+		name   string
+		header string
+		// key, when set, is the spelling the handler writes the header map
+		// under directly, which net/http sends as written.
+		key      string
+		existing string
+		fields   []prblm.Field
+		expected []string
+		// deleted makes an enricher delete header from the problem.
+		deleted bool
+	}{
+		{
+			name:     "marked cache-control replaces a lowercase handler key",
+			header:   "Cache-Control",
+			key:      "cache-control",
+			existing: "public, max-age=600",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "ordinary cache-control keeps a lowercase handler key",
+			header:   "Cache-Control",
+			key:      "cache-control",
+			existing: "public, max-age=600",
+			fields:   []prblm.Field{prblm.WithHeader("Cache-Control", "no-store")},
+			expected: []string{"public, max-age=600"},
+		},
+		{
+			name:     "vary under a lowercase handler key gains accept",
+			header:   "Vary",
+			key:      "vary",
+			existing: "Origin",
+			expected: []string{"Origin", "Accept"},
+		},
+		{
+			name:     "marked cache-control replaces the handler's",
+			header:   "Cache-Control",
+			existing: "public, max-age=600",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "ordinary cache-control keeps the handler's",
+			header:   "Cache-Control",
+			existing: "public, max-age=600",
+			fields:   []prblm.Field{prblm.WithHeader("Cache-Control", "no-store")},
+			expected: []string{"public, max-age=600"},
+		},
+		{
+			name:     "marked vary still lists accept",
+			header:   "Vary",
+			existing: "Origin",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Vary", "Cookie")},
+			expected: []string{"Cookie", "Accept"},
+		},
+		{
+			name:     "fallback carries no marks",
+			header:   "Cache-Control",
+			existing: "public, max-age=600",
+			fields: []prblm.Field{
+				prblm.WithReplacedHeader("Cache-Control", "no-store"),
+				prblm.WithExt("bad", make(chan int)),
+			},
+			expected: []string{"public, max-age=600"},
+		},
+		// A mark whose header was deleted from the problem replaces
+		// nothing: the library's defaults merge as usual.
+		{
+			name:     "deleted marked cache-control keeps the handler's",
+			header:   "Cache-Control",
+			existing: "public, max-age=60",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "x")},
+			expected: []string{"public, max-age=60"},
+			deleted:  true,
+		},
+		{
+			name:     "deleted marked vary adds accept to the handler's",
+			header:   "Vary",
+			existing: "Origin",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Vary", "x")},
+			expected: []string{"Origin", "Accept"},
+			deleted:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			engine := newEngine(func(c *gin.Context) {
+				if tt.key != "" {
+					c.Writer.Header()[tt.key] = []string{tt.existing}
+				} else {
+					c.Header(tt.header, tt.existing)
+				}
+
+				_ = c.Error(errUnavailable)
+			}, prblm.WithMappers(prblm.Is(errUnavailable, func(error) *prblm.Problem {
+				return prblm.New(http.StatusServiceUnavailable, tt.fields...)
+			})), prblm.WithEnrichers(func(_ context.Context, p *prblm.Problem) {
+				if tt.deleted {
+					p.Header.Del(tt.header)
+				}
+			}))
+
+			if got := sentValues(serve(t, engine, get(t, "/x")).Header(), tt.header); !slices.Equal(got, tt.expected) {
+				t.Errorf("%s = %q, want %q", tt.header, got, tt.expected)
+			}
+		})
+	}
+}
+
+// sentValues returns the values net/http sends for the header name of h:
+// those of every key that spells name in any case, a direct map write
+// included, in the order of the keys on the wire (sorted).
+func sentValues(h http.Header, name string) []string {
+	var values []string
+
+	for _, key := range slices.Sorted(maps.Keys(h)) {
+		if strings.EqualFold(key, name) {
+			values = append(values, h[key]...)
+		}
+	}
+
+	return values
+}
+
 // routeOK answers 200: a route that, if it ran, would give the hooks nothing.
 func routeOK(c *gin.Context) { c.Status(http.StatusOK) }
 
@@ -590,5 +778,41 @@ func TestHook_StatusOnly(t *testing.T) {
 				t.Errorf("problem status = %d, want %d", statuses[0], tt.status)
 			}
 		})
+	}
+}
+
+// valuePanicCtx is a request context whose Value panics with v.
+type valuePanicCtx struct {
+	context.Context //nolint:containedctx // a hostile context wrapping the request one
+
+	v any
+}
+
+func (c valuePanicCtx) Value(any) any { panic(c.v) }
+
+// gin-adapter / Scenario: Respond panics. Respond calls the request
+// context's Value outside its containment, so a context whose Value panics
+// makes it panic: Middleware answers the bare 500, for panic(nil) under
+// GODEBUG=panicnil=1 too, rather than committing the recorded 200.
+func TestMiddleware_RespondPanics(t *testing.T) {
+	t.Parallel()
+
+	if rerunUnderPanicNil(t) {
+		return
+	}
+
+	for _, v := range []any{"boom", nilPanicValue} {
+		engine := gin.New()
+		engine.Use(ginprblm.Middleware())
+		engine.Use(func(c *gin.Context) {
+			c.Request = c.Request.WithContext(valuePanicCtx{Context: c.Request.Context(), v: v})
+		})
+		engine.GET("/v1/vessels/7", func(c *gin.Context) { _ = c.Error(errors.New("db down")) })
+
+		rec := serve(t, engine, get(t, "/v1/vessels/7"))
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("Respond panicking with %v: status = %d, want the bare 500", v, rec.Code)
+		}
 	}
 }

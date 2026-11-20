@@ -221,7 +221,7 @@ func newPage(contentType string, body []byte, extra http.Header) page {
 	return page{
 		// newResponse adds Content-Type, Content-Length and Vary: Accept,
 		// and keeps the page's own Cache-Control.
-		full: newResponse(http.StatusOK, header, contentType, body),
+		full: newResponse(http.StatusOK, header, nil, contentType, body),
 		notModified: Response{Status: http.StatusNotModified, Header: http.Header{
 			"Etag":          {etag},
 			"Cache-Control": {pageCacheControl},

@@ -3,8 +3,11 @@ package prblm_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -289,7 +292,9 @@ func BenchmarkWrap(b *testing.B) {
 }
 
 // BenchmarkResolve measures resolution, finalization and enrichment of an
-// error, without encoding it.
+// error, without encoding it: a mapped error, an unmapped one, an unmapped
+// one wrapped twice by fmt.Errorf (a walk of 3 entries), and a self-looping
+// error, whose walk aborts at the budget and is reported with a note.
 func BenchmarkResolve(b *testing.B) {
 	h := prblm.NewHandler(benchOptions()...)
 
@@ -297,10 +302,26 @@ func BenchmarkResolve(b *testing.B) {
 		err    error
 		name   string
 		status int
+		// unwalkable requires the hooks to receive an ErrUnwalkableError
+		// note.
+		unwalkable bool
 	}{
 		{name: "mapped", err: errVesselNotFound, status: http.StatusNotFound},
 		{name: "fallback", err: errUnmapped, status: http.StatusInternalServerError},
+		{
+			name:   "wrapped",
+			err:    fmt.Errorf("load vessel: %w", fmt.Errorf("query: %w", errUnmapped)),
+			status: http.StatusInternalServerError,
+		},
+		{name: "unwalkable", err: newLoop("loop"), status: http.StatusInternalServerError, unwalkable: true},
 	}
+
+	// A handler with a recording hook tells an aborted walk, which Resolve
+	// reports with a note, from a plain fallback with the same status. It is
+	// not h, so the timed loop does not measure the recording.
+	var notes recorder
+
+	checker := prblm.NewHandler(append(benchOptions(), prblm.AddErrorHook(notes.hook))...)
 
 	for _, tc := range cases {
 		b.Run(tc.name, func(b *testing.B) {
@@ -308,6 +329,16 @@ func BenchmarkResolve(b *testing.B) {
 
 			if p := h.Resolve(ctx, tc.err); p.Status != tc.status {
 				b.Fatalf("Resolve() status = %d, want %d", p.Status, tc.status)
+			}
+
+			before := len(notes.recorded())
+			_ = checker.Resolve(ctx, tc.err)
+
+			noted := slices.ContainsFunc(notes.recorded()[before:], func(c hookCall) bool {
+				return errors.Is(c.err, prblm.ErrUnwalkableError)
+			})
+			if noted != tc.unwalkable {
+				b.Fatalf("Resolve() reported an ErrUnwalkableError note: %v, want %v", noted, tc.unwalkable)
 			}
 
 			b.ReportAllocs()
@@ -347,6 +378,62 @@ func BenchmarkRespond(b *testing.B) {
 
 			for b.Loop() {
 				h.Respond(ctx, req, errVesselNotFound)
+			}
+		})
+	}
+}
+
+// BenchmarkMergeInto measures merging a problem response's headers into the
+// response writer's: into an empty header, as the request-path benchmarks
+// do, and into one middleware already filled, where each key is checked for
+// a non-canonical spelling of the response's header names. Each iteration
+// also refills the header, a few map writes that are the same in every
+// version, so compare a case across versions rather than read its absolute
+// time as MergeInto's.
+func BenchmarkMergeInto(b *testing.B) {
+	h := prblm.NewHandler(benchOptions()...)
+	req := prblm.Request{Method: http.MethodGet, Path: benchPathVessel}
+
+	res, ok := h.Respond(b.Context(), req, errVesselNotFound)
+	if !ok {
+		b.Fatal("Respond() reported no problem")
+	}
+
+	middleware := http.Header{
+		"Access-Control-Allow-Origin": {"*"},
+		"Strict-Transport-Security":   {"max-age=63072000"},
+		"X-Content-Type-Options":      {"nosniff"},
+		"X-Request-Id":                {"r1"},
+	}
+
+	cases := []struct {
+		name   string
+		before http.Header
+	}{
+		{name: "empty"},
+		{name: "middleware", before: middleware},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			dst := make(http.Header)
+			fill := func() {
+				clear(dst)
+				maps.Copy(dst, tc.before)
+			}
+
+			fill()
+			res.MergeInto(dst)
+
+			if got := dst.Get("Content-Type"); got != problemJSONType || len(dst) != len(tc.before)+len(res.Header) {
+				b.Fatalf("MergeInto() = %v; want Content-Type %q and %d headers", dst, problemJSONType, len(tc.before)+len(res.Header))
+			}
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				fill()
+				res.MergeInto(dst)
 			}
 		})
 	}

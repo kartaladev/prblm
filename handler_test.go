@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,6 +243,27 @@ type lockedError struct{}
 func (lockedError) Error() string           { return "locked" }
 func (lockedError) Problem() *prblm.Problem { return prblm.New(422) }
 
+// pointerDescriberError describes itself as a 422 problem through a pointer
+// receiver that never dereferences it, so a typed nil would describe itself
+// too, were it not skipped.
+type pointerDescriberError struct{}
+
+func (*pointerDescriberError) Error() string           { return "pointer describer" }
+func (*pointerDescriberError) Problem() *prblm.Problem { return prblm.New(422) }
+
+// emptyDescriberAsError's As method reports a match for a describer target
+// without setting it, and wraps err.
+type emptyDescriberAsError struct{ err error }
+
+func (e emptyDescriberAsError) Error() string { return "empty describer as" }
+func (e emptyDescriberAsError) Unwrap() error { return e.err }
+
+func (emptyDescriberAsError) As(target any) bool {
+	_, ok := target.(*prblm.Describer)
+
+	return ok
+}
+
 // silentError is a describer that declines to describe itself.
 type silentError struct{}
 
@@ -281,7 +304,12 @@ func TestResolve_SelfDescribing(t *testing.T) {
 		{name: "describer returning nil", err: silentError{}, expected: 500, calls: 1},
 		{name: "describer in a joined error", err: errors.Join(io.EOF, lockedError{}), expected: 422},
 		{name: "describer through an As method", err: aliasError{}, expected: 422},
+		// error-mapping / Scenario: Problem or describer in the chain, typed
+		// nils: a typed nil is never self-describing.
 		{name: "typed nil problem", err: (*prblm.Problem)(nil), expected: 500, calls: 1},
+		{name: "typed nil problem joined with a problem", err: errors.Join((*prblm.Problem)(nil), prblm.New(404)), expected: 404},
+		{name: "typed nil describer joined with a problem", err: errors.Join((*pointerDescriberError)(nil), prblm.New(409)), expected: 409},
+		{name: "As leaving the describer nil", err: emptyDescriberAsError{err: prblm.New(404)}, expected: 404},
 		// A received problem never describes itself; the problem taken out of
 		// it does (issue #8).
 		{name: "received problem", err: received, expected: 502, calls: 1},
@@ -361,7 +389,8 @@ func TestResolve_Received(t *testing.T) {
 		{name: "inside ErrNotFound", err: func(r *prblm.Received) error { return fmt.Errorf("%w: %w", prblm.ErrNotFound, r) }, status: 404, detail: detailNotFound},
 		{name: "status hint around it", err: func(r *prblm.Received) error { return prblm.WithStatus(r, 503) }, status: 503},
 		{name: "joined", err: func(r *prblm.Received) error { return errors.Join(io.EOF, r) }, status: 502, detail: detailBadGateway},
-		{name: "wrapped typed nil", err: func(*prblm.Received) error { return fmt.Errorf("op: %w", (*prblm.Received)(nil)) }, status: 502, detail: detailBadGateway},
+		// A typed nil is skipped like any other, so it is not a bad gateway.
+		{name: "wrapped typed nil", err: func(*prblm.Received) error { return fmt.Errorf("op: %w", (*prblm.Received)(nil)) }, status: 500},
 		{name: "built-ins disabled", opts: []prblm.Option{prblm.WithoutBuiltins()}, status: 500},
 		// Examples: consumer decides.
 		{
@@ -571,6 +600,89 @@ func TestResolve_CopyConcurrent(t *testing.T) {
 
 			if _, ok := shared.Ext("trace_id"); ok || shared.Instance != "" || shared.Title != "" {
 				t.Errorf("shared problem was modified: %+v", *shared)
+			}
+		})
+	}
+}
+
+// problem-document / Scenario: Package-level problems keep their marks.
+func TestResolve_ReplacedHeaderShared(t *testing.T) {
+	t.Parallel()
+
+	const requests = 64
+
+	tests := []struct {
+		name   string
+		shared *prblm.Problem
+		// mark is the field the enricher applies to each resolved copy to
+		// add X-Request: WithHeader, or WithReplacedHeader to append a mark.
+		mark func(name, value string) prblm.Field
+	}{
+		{
+			name:   "enricher adds an ordinary header",
+			shared: prblm.New(http.StatusServiceUnavailable, prblm.WithReplacedHeader("Cache-Control", "no-store")),
+			mark:   prblm.WithHeader,
+		},
+		// Murphy row: three marks leave spare capacity in the shared list, so
+		// a copy that kept it would append into the shared problem.
+		{
+			name: "enricher marks a header on a list with room",
+			shared: prblm.New(http.StatusServiceUnavailable,
+				prblm.WithReplacedHeader("Cache-Control", "no-store"),
+				prblm.WithReplacedHeader("Link", "</status>; rel=help"),
+				prblm.WithReplacedHeader("Retry-After", "5"),
+			),
+			mark: prblm.WithReplacedHeader,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			header, marks := tt.shared.Header.Clone(), slices.Clone(prblm.ReplacedHeaders(tt.shared))
+			h := prblm.NewHandler(
+				prblm.WithMappers(prblm.MapperFunc(func(context.Context, error) *prblm.Problem { return tt.shared })),
+				prblm.WithEnrichers(func(ctx context.Context, p *prblm.Problem) {
+					if id, ok := ctx.Value(traceKey{}).(string); ok {
+						tt.mark("X-Request", id)(p)
+					}
+				}),
+			)
+			handler := h.Wrap(func(http.ResponseWriter, *http.Request) error { return errors.New("x") })
+
+			var wg sync.WaitGroup
+
+			for i := range requests {
+				wg.Go(func() {
+					id := "request-" + strconv.Itoa(i)
+					ctx := context.WithValue(t.Context(), traceKey{}, id)
+					rec := httptest.NewRecorder()
+					handler.ServeHTTP(rec, httptest.NewRequestWithContext(ctx, http.MethodGet, "/r", http.NoBody))
+
+					if got := rec.Header().Values("X-Request"); len(got) != 1 || got[0] != id {
+						t.Errorf("request %d: X-Request = %q, want %q", i, got, id)
+					}
+
+					if got := rec.Header().Values("Cache-Control"); len(got) != 1 || got[0] != "no-store" {
+						t.Errorf("request %d: Cache-Control = %q, want no-store", i, got)
+					}
+				})
+			}
+
+			wg.Wait()
+
+			if !maps.EqualFunc(tt.shared.Header, header, slices.Equal[[]string]) {
+				t.Errorf("shared header = %v, want it unchanged: %v", tt.shared.Header, header)
+			}
+
+			got := prblm.ReplacedHeaders(tt.shared)
+			if !slices.Equal(got, marks) {
+				t.Errorf("shared marks = %q, want them unchanged: %q", got, marks)
+			}
+
+			if spare := got[len(got):cap(got)]; slices.ContainsFunc(spare, func(s string) bool { return s != "" }) {
+				t.Errorf("shared marks gained %q in their spare capacity", spare)
 			}
 		})
 	}

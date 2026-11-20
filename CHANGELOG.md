@@ -10,6 +10,100 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **A panicking `Unwrap`, `Is` or `As` method of the error being answered now fails closed.** In
+  v0.2.1 the resolution step that met the panic counted it as no match and went on, so another step
+  could still map the error. Now the panic aborts the error's walk, and the answer is the safe 500 even
+  when another step would have matched: an error the handler cannot inspect is not safe to map.
+  The hooks receive one note wrapping `ErrUnwalkableError` (which wraps the `*PanicError`), then
+  the error, instead of one or more `*PanicError` reports.
+- **A status hint and a sentinel side by side: the first in `errors.Is` order decides.** In
+  v0.2.1 the sentinel step ran before the status-hint step, so
+  `errors.Join(prblm.WithStatus(errors.New("x"), 418), prblm.ErrNotFound)` gave 404. Every step
+  now scans the one walk of the chain, and the hint comes first in that order, so the answer is
+  418. With the sentinel first, `errors.Join(prblm.ErrNotFound, prblm.WithStatus(...))`, it is
+  still 404, and a hint wrapped around a sentinel still wins, as before.
+
+### Added
+
+- `ErrUnwalkableError`. The error chain is now walked once per error, before the first resolution
+  step, within a budget of 1,000 entries. A chain that loops back on itself, nests too deep, fans
+  out too wide, or whose `Unwrap`, `Is` or `As` method panics, is answered at once with the safe
+  500 problem, and the hooks first receive a note wrapping `ErrUnwalkableError` with the reason,
+  `budget` or `panic`. The note never contains the error's text: for reason `panic`, its message
+  names only the panic value's type, as in `prblm: error chain cannot be walked: panic: *mypkg.Err`
+  (`<nil>` for a nil value), and the `*PanicError` it wraps holds the value for a hook that chooses
+  to inspect it.
+- `Handler.RespondPanic`, the panic counterpart of `Respond` for framework adapters: it turns a
+  recovered `*PanicError` into the safe 500 response `Recover` writes, without writing it, or
+  reports false when the client connection is broken.
+- `WithReplacedHeader`, a `Field` that sets a header on a problem and makes it replace the value
+  the handler or a middleware already set, in every adapter. It lets a problem force
+  `Cache-Control: no-store` over a route's `public, max-age=...`. `WithHeader` keeps the default
+  merge rules. A mark whose header is deleted from the problem (by an enricher, say) replaces
+  nothing: the library's `Vary` and `Cache-Control` defaults then merge as usual.
+
+### Changed
+
+- A typed nil (a nil pointer) in the error chain is skipped, and its methods are never called. The
+  built-in mappers and the `Is`, `As` and `Status` helpers no longer match it.
+- An `As` method that reports a match but leaves a pointer or interface target nil is no match. A
+  zero value of another kind, such as 0 for an `int` error type, still matches, as `errors.As`
+  counts it.
+- A typed-nil `*Received` in the chain is skipped like any typed nil, so it no longer resolves as
+  `ErrBadGateway`: on its own it gives the safe 500, not a 502.
+- `Is`, `As` and `Status` mappers called directly through `MapError` no longer look up the status
+  hint they never use, so an `As` method of the error past the match can no longer make them
+  decline.
+- Resolution walks the error once instead of about nine times for an unrecognized error. Against
+  v0.2.1, a problem response allocates as often and 112 to 128 bytes more (the walk), and takes up
+  to 2% longer in net/http and gin, the same in fiber. The benchmarks are in
+  [BENCHMARKS.md](BENCHMARKS.md).
+
+### Fixed
+
+- `Respond` and `Wrap` no longer hang on an error whose `Unwrap() error` returns itself, or crash
+  the process with a stack overflow on an `errors.Join` that contains itself, and a fan-out such as
+  25 nested `errors.Join(n, n)` no longer takes seconds: such an error gets the safe 500 at once,
+  with an `ErrUnwalkableError` note.
+- `Recover` no longer hangs on a panic value whose chain loops back on itself: it answers the safe
+  500 after one bounded walk, with one note.
+- A typed-nil `*Problem` joined ahead of a real problem no longer hides it: the real problem is
+  sent instead of a 500. A typed-nil `*http.MaxBytesError` no longer gives a false 413, nor does
+  an `As` method that reports a match and sets nothing.
+- A `panic(nil)` in a mapper, describer or enricher is reported to the hooks as a `*PanicError`,
+  also under `GODEBUG=panicnil=1`, where it used to be contained without a report.
+- `Recover` answers a handler's `panic(nil)` under `GODEBUG=panicnil=1` with the safe 500 and
+  reports it as a `*PanicError` with value nil. It used to tell a panic apart by `recover`
+  returning non-nil, so the request got an empty 200 and the hooks heard nothing. The same holds
+  for a writer that calls `panic(nil)` while the problem is written: the constant minimal problem
+  is written and the panic reported. A `runtime.Goexit` in the handler, which `recover` cannot
+  tell from that `panic(nil)`, is answered the same way, and the problem is flushed, because the
+  goroutine then ends before net/http finishes the response. Over HTTP/1.x the client receives the
+  problem complete; over HTTP/2, net/http then resets the stream of the handler that did not
+  return, so the client receives the problem's bytes and then a stream reset (`INTERNAL_ERROR`).
+  A writer that cannot flush keeps the problem unsent. The hooks are told in every case. Nested
+  `Recover`s report a panic once, but a Goexit goes on through the outer ones, and each reports it
+  again with a nil problem: under `GODEBUG=panicnil=1` they cannot tell it from a new `panic(nil)`
+  in the code between them, which must never go unreported.
+- `Response.MergeInto`, and so `Wrap`, `Write` and `Recover`, treats a header the handler set under
+  a non-canonical key as that header. A handler that writes the map directly,
+  `w.Header()["cache-control"] = ...`, makes net/http send that key as written, so a problem's
+  `WithReplacedHeader("Cache-Control", "no-store")` used to go out next to the handler's
+  `public, max-age=600`, an unmarked `Cache-Control` was added beside the handler's instead of
+  yielding to it, and `Vary` got a second line instead of merging. Every spelling of a response
+  header's name is now folded into the canonical name before the merge rules apply (the canonical
+  key's values first, then the others in sorted key order), and the other spellings are deleted.
+  Keys of headers the response does not set are left as they are. A handler that sets headers with
+  `Header().Set` or `Add`, the common case, pays one pass over its header keys and no allocation; an
+  empty header pays nothing.
+- Building the `ErrUnwalkableError` note no longer formats the panic value, so a panic value whose
+  `Error` method panics (an `Is` method that panics with such an error) can no longer make
+  `Respond`, `Wrap`, `Recover` or `RespondPanic` panic. The note's message names only the value's
+  type, so a hook can format it safely too, and an error that panics with itself no longer leaks
+  its own text through the note.
+
 ## [0.2.1] - 2026-11-19
 
 ### Fixed

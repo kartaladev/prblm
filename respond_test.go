@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -600,6 +601,64 @@ func TestResponse_MergeInto(t *testing.T) {
 			src:      http.Header{"Cache-Control": {"no-store"}},
 			expected: http.Header{"Cache-Control": {"no-store"}},
 		},
+		// A handler may write the header map directly, under a key net/http
+		// sends as written: every spelling of a response header name is that
+		// header (problem-response / Scenario: A handler header under a
+		// non-canonical key).
+		{
+			name:     "handler cache-control under a lowercase key kept",
+			dst:      http.Header{"cache-control": {"max-age=5"}},
+			src:      http.Header{"Cache-Control": {"no-store"}},
+			expected: http.Header{"Cache-Control": {"max-age=5"}},
+		},
+		{
+			name:     "vary under a lowercase key gains accept",
+			dst:      http.Header{"vary": {"Origin"}},
+			src:      http.Header{"Vary": {"Accept"}},
+			expected: http.Header{"Vary": {"Origin", "Accept"}},
+		},
+		{
+			name:     "vary under a lowercase key already listing accept",
+			dst:      http.Header{"vary": {"accept"}},
+			src:      http.Header{"Vary": {"Accept"}},
+			expected: http.Header{"Vary": {"accept"}},
+		},
+		{
+			name:     "every spelling of a replaced header removed",
+			dst:      http.Header{"content-type": {"text/plain"}, "CONTENT-TYPE": {"text/html"}},
+			src:      http.Header{"Content-Type": {"application/problem+json"}},
+			expected: http.Header{"Content-Type": {"application/problem+json"}},
+		},
+		{
+			name:     "spellings combined, canonical first, then sorted",
+			dst:      http.Header{"cache-control": {"c"}, "Cache-Control": {"a"}, "CACHE-CONTROL": {"b"}},
+			src:      http.Header{"Cache-Control": {"no-store"}},
+			expected: http.Header{"Cache-Control": {"a", "b", "c"}},
+		},
+		{
+			name:     "spelling without values counts as no value",
+			dst:      http.Header{"cache-control": nil},
+			src:      http.Header{"Cache-Control": {"no-store"}},
+			expected: http.Header{"Cache-Control": {"no-store"}},
+		},
+		{
+			name:     "unrelated non-canonical key untouched",
+			dst:      http.Header{"x-request-id": {"r1"}},
+			src:      http.Header{"Content-Type": {"application/problem+json"}},
+			expected: http.Header{"x-request-id": {"r1"}, "Content-Type": {"application/problem+json"}},
+		},
+		{
+			name:     "spelling of a long name replaced",
+			dst:      http.Header{strings.ToLower(longHeaderName): {"handler"}},
+			src:      http.Header{longHeaderName: {"problem"}},
+			expected: http.Header{longHeaderName: {"problem"}},
+		},
+		{
+			name:     "key that is no valid field name untouched",
+			dst:      http.Header{"cache control": {"max-age=5"}},
+			src:      http.Header{"Cache-Control": {"no-store"}},
+			expected: http.Header{"cache control": {"max-age=5"}, "Cache-Control": {"no-store"}},
+		},
 		{
 			name:     "empty response header changes nothing",
 			dst:      http.Header{"X-Request-Id": {"r1"}},
@@ -617,6 +676,109 @@ func TestResponse_MergeInto(t *testing.T) {
 
 			if !maps.EqualFunc(tt.dst, tt.expected, slices.Equal[[]string]) {
 				t.Errorf("MergeInto: header = %v, want %v", tt.dst, tt.expected)
+			}
+		})
+	}
+}
+
+// problem-response / Scenario: Replaced headers win over existing ones, at
+// the merge every adapter shares. The marks only reach a Response through
+// Respond, so each response is rendered from a problem built with fields.
+func TestResponse_MergeInto_Replaced(t *testing.T) {
+	t.Parallel()
+
+	// dropLink deletes Link after it was marked, leaving the mark inert.
+	dropLink := prblm.Field(func(p *prblm.Problem) { p.Header.Del("Link") })
+
+	tests := []struct {
+		name     string
+		dst      http.Header
+		fields   []prblm.Field
+		header   string
+		expected []string
+	}{
+		{
+			name:     "marked cache-control replaces the destination's",
+			dst:      http.Header{"Cache-Control": {"public, max-age=600"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "unmarked cache-control keeps the destination's",
+			dst:      http.Header{"Cache-Control": {"public, max-age=600"}},
+			fields:   []prblm.Field{prblm.WithHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"public, max-age=600"},
+		},
+		{
+			name:     "marked vary replaces the destination's and lists accept",
+			dst:      http.Header{"Vary": {"Origin"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Vary", "Cookie")},
+			header:   "Vary",
+			expected: []string{"Cookie", "Accept"},
+		},
+		{
+			name:     "unmarked vary adds to the destination's",
+			dst:      http.Header{"Vary": {"Origin"}},
+			fields:   []prblm.Field{prblm.WithHeader("Vary", "Cookie")},
+			header:   "Vary",
+			expected: []string{"Origin", "Cookie", "Accept"},
+		},
+		{
+			name:     "marked cache-control replaces every spelling in the destination",
+			dst:      http.Header{"cache-control": {"public, max-age=600"}, "Cache-Control": {"private"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "marked vary replaces a lowercase destination key",
+			dst:      http.Header{"vary": {"Origin"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Vary", "Cookie")},
+			header:   "Vary",
+			expected: []string{"Cookie", "Accept"},
+		},
+		// Murphy rows.
+		{
+			name:     "mark of a deleted header is inert",
+			dst:      http.Header{"Link": {"</old>; rel=x"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Link", "</new>; rel=x"), dropLink},
+			header:   "Link",
+			expected: []string{"</old>; rel=x"},
+		},
+		{
+			name: "fallback response carries no marks",
+			dst:  http.Header{"Cache-Control": {"public, max-age=600"}},
+			fields: []prblm.Field{
+				prblm.WithReplacedHeader("Cache-Control", "no-store"),
+				prblm.WithExt("bad", make(chan int)),
+			},
+			header:   "Cache-Control",
+			expected: []string{"public, max-age=600"},
+		},
+		{
+			name:   "nil destination",
+			fields: []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			header: "Cache-Control",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7"}
+
+			res, ok := mapping(prblm.New(http.StatusServiceUnavailable, tt.fields...)).Respond(t.Context(), req, errVesselNotFound)
+			if !ok {
+				t.Fatal("Respond() reported nothing to write")
+			}
+
+			res.MergeInto(tt.dst)
+
+			if got := sentValues(tt.dst, tt.header); !slices.Equal(got, tt.expected) {
+				t.Errorf("%s = %q, want %q", tt.header, got, tt.expected)
 			}
 		})
 	}
@@ -725,3 +887,170 @@ func TestResponse_MergeInto_NoAliasing(t *testing.T) {
 		}
 	}
 }
+
+// panicRequest is the request the panic-recovery scenarios answer.
+var panicRequest = prblm.Request{Method: http.MethodGet, Path: "/v1/vessels/7"}
+
+// panicAnswer is what RespondPanic returns.
+type panicAnswer struct {
+	res     prblm.Response
+	isWrite bool
+}
+
+// respondPanicWithin calls h.RespondPanic for panicRequest under the guard
+// of within.
+func respondPanicWithin(t *testing.T, h *prblm.Handler, pe *prblm.PanicError) panicAnswer {
+	t.Helper()
+
+	return within(t, "RespondPanic", func() panicAnswer {
+		res, ok := h.RespondPanic(t.Context(), panicRequest, pe)
+
+		return panicAnswer{res: res, isWrite: ok}
+	})
+}
+
+// assertSafe500 checks that a is the safe 500 problem, to be written.
+func assertSafe500(t *testing.T, a panicAnswer) {
+	t.Helper()
+
+	if !a.isWrite {
+		t.Fatal("RespondPanic reported nothing to write, want the safe 500 problem")
+	}
+
+	if a.res.Status != 500 || string(a.res.Body) != safe500 {
+		t.Errorf("response = %d %s, want 500 %s", a.res.Status, a.res.Body, safe500)
+	}
+
+	if got := a.res.Header.Get("Content-Type"); got != problemJSONType {
+		t.Errorf("Content-Type = %q, want %s", got, problemJSONType)
+	}
+}
+
+// assertPanicHooks checks that the hooks received pe with the 500 problem,
+// after an ErrUnwalkableError note naming reason, unless reason is "". The
+// note of reason "panic" wraps the "boom" panic.
+func assertPanicHooks(t *testing.T, calls []hookCall, pe error, reason string) {
+	t.Helper()
+
+	if reason == "" {
+		assertHookCalls(t, calls, pe, 500, 0)
+
+		return
+	}
+
+	if note := assertNoted(t, calls, pe, reason); note != nil && !isBoom(note.Value) {
+		t.Errorf("note panic value = %#v, want boom", note.Value)
+	}
+}
+
+// assertNilPanic checks that the only hook call is a panic error with value
+// nil, with the 500 problem.
+func assertNilPanic(t *testing.T, calls []hookCall) {
+	t.Helper()
+
+	if len(calls) != 1 {
+		t.Fatalf("hook calls = %+v, want one", calls)
+	}
+
+	if pe, ok := errors.AsType[*prblm.PanicError](calls[0].err); !ok || pe.Value != nil || calls[0].status != 500 {
+		t.Errorf("hook call = %v with status %d, want a panic error with value nil and 500", calls[0].err, calls[0].status)
+	}
+}
+
+// panic-recovery / Scenario: Panic response without writing. The broken
+// connection rows are TestRespondPanic_Broken, which Plan 9 cannot build,
+// and the panic(nil) row is TestRespondPanic_PanicNil.
+func TestRespondPanic(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value any
+		// reason is the reason of the ErrUnwalkableError note, "" for none.
+		reason string
+	}{
+		{name: "plain value", value: "boom"},
+		{name: "self-loop", value: newLoop("loop"), reason: "budget"},
+		{name: "is method panics", value: isPanicError{}, reason: "panic"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			pe := &prblm.PanicError{Value: tt.value}
+			assertSafe500(t, respondPanicWithin(t, prblm.NewHandler(prblm.OnError(r.hook)), pe))
+
+			assertPanicHooks(t, r.recorded(), pe, tt.reason)
+		})
+	}
+
+	// Murphy row: the walk aborts with a panic value that cannot be
+	// formatted; building the note must not format it.
+	t.Run("unformattable abort value", func(t *testing.T) {
+		t.Parallel()
+
+		var r recorder
+
+		pe := &prblm.PanicError{Value: hostileIsError{}}
+		assertSafe500(t, respondPanicWithin(t, prblm.NewHandler(prblm.OnError(r.hook)), pe))
+
+		if calls := r.recorded(); len(calls) != 2 || !errors.Is(calls[0].err, prblm.ErrUnwalkableError) || !isSameError(calls[1].err, pe) {
+			t.Errorf("hook calls = %d, want the note, then the panic error", len(calls))
+		}
+	})
+
+	t.Run("nil panic error", func(t *testing.T) {
+		t.Parallel()
+
+		var r recorder
+
+		assertSafe500(t, respondPanicWithin(t, prblm.NewHandler(prblm.OnError(r.hook)), nil))
+		assertNilPanic(t, r.recorded())
+	})
+
+	// Murphy row: a handler that was never created.
+	t.Run("nil problem handler", func(t *testing.T) {
+		t.Parallel()
+
+		msg := mustPanic(t, func() {
+			(*prblm.Handler)(nil).RespondPanic(t.Context(), panicRequest, &prblm.PanicError{Value: "boom"})
+		})
+		if !strings.Contains(msg, "Handler.RespondPanic") {
+			t.Errorf("panic %q does not name RespondPanic", msg)
+		}
+	})
+}
+
+// panic-recovery / Scenario: Panic response without writing (the panic(nil)
+// row). The row needs GODEBUG=panicnil=1, so the test runs itself again in
+// a subprocess with that setting.
+func TestRespondPanic_PanicNil(t *testing.T) {
+	t.Parallel()
+
+	if rerunUnderPanicNil(t) {
+		return
+	}
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+
+	// What an adapter's recovery does: recover, then answer.
+	recovered := func() (a panicAnswer) {
+		defer func() {
+			a = respondPanicWithin(t, h, &prblm.PanicError{Value: recover(), Stack: debug.Stack()})
+		}()
+
+		panic(nilValue)
+	}
+
+	assertSafe500(t, recovered())
+	assertNilPanic(t, r.recorded())
+}
+
+// longHeaderName is a canonical header name of 73 bytes: a spelling of a
+// long name folds like any other.
+var longHeaderName = "X-" + strings.Repeat("Long-", 13) + "Header"

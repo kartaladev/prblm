@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1210,6 +1213,197 @@ func serveRecorded(t *testing.T, handler http.Handler, accept string) *httptest.
 	return rec
 }
 
+// sentValues returns the values net/http sends for the header name of h:
+// those of every key that spells name in any case, a direct map write
+// included, in the order of the keys on the wire (sorted).
+func sentValues(h http.Header, name string) []string {
+	keys := slices.Sorted(maps.Keys(h))
+
+	var values []string
+
+	for _, key := range keys {
+		if strings.EqualFold(key, name) {
+			values = append(values, h[key]...)
+		}
+	}
+
+	return values
+}
+
+// problem-response / Scenarios: Headers on the response (the WithHeader
+// row), Replaced headers win over existing ones (net/http rows, the
+// response falls back, and the marked header is deleted), A handler header
+// under a non-canonical key.
+func TestWrap_ReplacedHeader(t *testing.T) {
+	t.Parallel()
+
+	// bodyLength stands for the length of the body actually sent.
+	const bodyLength = "<body length>"
+
+	tests := []struct {
+		name     string
+		existing http.Header
+		fields   []prblm.Field
+		header   string
+		expected []string
+		// deleted makes an enricher delete header from the problem.
+		deleted bool
+	}{
+		{
+			name:     "ordinary cache-control keeps the handler's",
+			existing: http.Header{"Cache-Control": {"public, max-age=600"}},
+			fields:   []prblm.Field{prblm.WithHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"public, max-age=600"},
+		},
+		{
+			name:     "marked cache-control replaces the handler's",
+			existing: http.Header{"Cache-Control": {"public, max-age=600"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "marked cache-control without a handler value",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "marked vary still lists accept",
+			existing: http.Header{"Vary": {"Origin"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Vary", "Cookie")},
+			header:   "Vary",
+			expected: []string{"Cookie", "Accept"},
+		},
+		{
+			name:     "marked link replaces the handler's",
+			existing: http.Header{"Link": {"</old>; rel=x"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Link", "</new>; rel=x")},
+			header:   "Link",
+			expected: []string{"</new>; rel=x"},
+		},
+		// The handler wrote the header map directly, under a key net/http
+		// sends as written.
+		{
+			name:     "marked cache-control replaces a lowercase handler key",
+			existing: http.Header{"cache-control": {"public, max-age=600"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"no-store"},
+		},
+		{
+			name:     "ordinary cache-control keeps a lowercase handler key",
+			existing: http.Header{"cache-control": {"public, max-age=600"}},
+			fields:   []prblm.Field{prblm.WithHeader("Cache-Control", "no-store")},
+			header:   "Cache-Control",
+			expected: []string{"public, max-age=600"},
+		},
+		{
+			name:     "vary under a lowercase handler key gains accept",
+			existing: http.Header{"vary": {"Origin"}},
+			header:   "Vary",
+			expected: []string{"Origin", "Accept"},
+		},
+		{
+			name:     "content-type under any handler spelling replaced",
+			existing: http.Header{"content-type": {"text/html"}, "CONTENT-TYPE": {"text/plain"}},
+			header:   "Content-Type",
+			expected: []string{problemJSONType},
+		},
+		{
+			name:     "marked content-type stays the library's",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Content-Type", "text/html")},
+			header:   "Content-Type",
+			expected: []string{problemJSONType},
+		},
+		{
+			name:     "marked content-length stays the real length",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Content-Length", "1")},
+			header:   "Content-Length",
+			expected: []string{bodyLength},
+		},
+		// The response falls back: nothing of the problem is sent, marks
+		// included.
+		{
+			name:     "fallback carries no marks",
+			existing: http.Header{"Cache-Control": {"public, max-age=600"}},
+			fields: []prblm.Field{
+				prblm.WithReplacedHeader("Cache-Control", "no-store"),
+				prblm.WithExt("bad", make(chan int)),
+			},
+			header:   "Cache-Control",
+			expected: []string{"public, max-age=600"},
+		},
+		// A mark whose header was deleted from the problem replaces
+		// nothing: the library's defaults merge as usual.
+		{
+			name:     "deleted marked cache-control keeps the handler's",
+			existing: http.Header{"Cache-Control": {"public, max-age=60"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "x")},
+			header:   "Cache-Control",
+			expected: []string{"public, max-age=60"},
+			deleted:  true,
+		},
+		{
+			name:     "deleted marked vary adds accept to the handler's",
+			existing: http.Header{"Vary": {"Origin"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Vary", "x")},
+			header:   "Vary",
+			expected: []string{"Origin", "Accept"},
+			deleted:  true,
+		},
+		{
+			name:     "deleted marked link leaves the handler's",
+			existing: http.Header{"Link": {"</old>; rel=x"}},
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Link", "</new>; rel=x")},
+			header:   "Link",
+			expected: []string{"</old>; rel=x"},
+			deleted:  true,
+		},
+		{
+			name:     "deleted marked cache-control without a handler value",
+			fields:   []prblm.Field{prblm.WithReplacedHeader("Cache-Control", "x")},
+			header:   "Cache-Control",
+			expected: []string{"no-store"},
+			deleted:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			p := prblm.New(http.StatusServiceUnavailable, tt.fields...)
+			h := prblm.NewHandler(
+				prblm.WithMappers(prblm.MapperFunc(func(context.Context, error) *prblm.Problem { return p })),
+				prblm.WithEnrichers(func(_ context.Context, p *prblm.Problem) {
+					if tt.deleted {
+						p.Header.Del(tt.header)
+					}
+				}),
+			)
+
+			handler := h.Wrap(
+				func(w http.ResponseWriter, _ *http.Request) error {
+					maps.Copy(w.Header(), tt.existing.Clone())
+
+					return errVesselNotFound
+				})
+			rec := serveRecorded(t, handler, "")
+
+			expected := slices.Clone(tt.expected)
+			if i := slices.Index(expected, bodyLength); i >= 0 {
+				expected[i] = strconv.Itoa(rec.Body.Len())
+			}
+
+			if got := sentValues(rec.Header(), tt.header); !slices.Equal(got, expected) {
+				t.Errorf("%s = %q, want %q", tt.header, got, expected)
+			}
+		})
+	}
+}
+
 // panic-recovery / Scenario: Middleware installed or not.
 func TestRecover(t *testing.T) {
 	t.Parallel()
@@ -1540,18 +1734,12 @@ func TestRecover_Started(t *testing.T) {
 	}
 }
 
-// serveContained is serveRecorded, failing the test instead of crashing it
-// when a panic escapes handler.
-func serveContained(t *testing.T, handler http.Handler) *httptest.ResponseRecorder {
+// serveWithin is serveRecorded under the guard of within: a panic that
+// escapes handler fails the test, and a hang crashes it after a second.
+func serveWithin(t *testing.T, handler http.Handler) *httptest.ResponseRecorder {
 	t.Helper()
 
-	defer func() {
-		if v := recover(); v != nil {
-			t.Fatalf("a panic escaped the handler: %v", v)
-		}
-	}()
-
-	return serveRecorded(t, handler, "")
+	return within(t, "the handler", func() *httptest.ResponseRecorder { return serveRecorded(t, handler, "") })
 }
 
 // panic-recovery / Scenario: Hostile panic value. The row of a value wrapping
@@ -1559,24 +1747,17 @@ func serveContained(t *testing.T, handler http.Handler) *httptest.ResponseRecord
 func TestRecover_HostileValue(t *testing.T) {
 	t.Parallel()
 
-	// report is one hook call: the panic value its *prblm.PanicError holds,
-	// and the status of its problem, 0 for none.
-	type report struct {
-		value  any
-		status int
-	}
-
 	tests := []struct {
 		name  string
 		value any
-		hooks []report
+		// reason is the reason of the ErrUnwalkableError note, "" for none.
+		reason string
 	}{
-		{
-			name:  "is method panics",
-			value: isPanicError{},
-			hooks: []report{{value: "boom"}, {value: isPanicError{}, status: 500}},
-		},
-		{name: "plain value", value: "boom", hooks: []report{{value: "boom", status: 500}}},
+		{name: "is method panics", value: isPanicError{}, reason: "panic"},
+		{name: "self-loop", value: newLoop("loop"), reason: "budget"},
+		{name: "join cycle", value: joinCycle(t), reason: "budget"},
+		{name: "nil pointer with a value-receiver is method", value: (*valueIsError)(nil)},
+		{name: "plain value", value: "boom"},
 	}
 
 	for _, tt := range tests {
@@ -1586,28 +1767,27 @@ func TestRecover_HostileValue(t *testing.T) {
 			var r recorder
 
 			h := prblm.NewHandler(prblm.OnError(r.hook))
-			rec := serveContained(t, h.Recover(panicking(tt.value)))
+			rec := serveWithin(t, h.Recover(panicking(tt.value)))
 
 			if rec.Code != 500 || rec.Body.String() != safe500 {
 				t.Errorf("got %d %s, want 500 %s", rec.Code, rec.Body, safe500)
 			}
 
-			if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
-				t.Errorf("Content-Type = %q, want application/problem+json", got)
+			if got := rec.Header().Get("Content-Type"); got != problemJSONType {
+				t.Errorf("Content-Type = %q, want %s", got, problemJSONType)
 			}
 
 			calls := r.recorded()
-			if len(calls) != len(tt.hooks) {
-				t.Fatalf("hook called %d times, want %d: %+v", len(calls), len(tt.hooks), calls)
+			if len(calls) == 0 {
+				t.Fatal("hook not called")
 			}
 
-			for i, want := range tt.hooks {
-				pe, ok := errors.AsType[*prblm.PanicError](calls[i].err)
-				if !ok || pe.Value != want.value || calls[i].status != want.status {
-					t.Errorf("hook call %d got %v with status %d, want a panic holding %v with status %d",
-						i, calls[i].err, calls[i].status, want.value, want.status)
-				}
+			last := calls[len(calls)-1]
+			if pe, ok := errors.AsType[*prblm.PanicError](last.err); !ok || pe.Value != tt.value {
+				t.Fatalf("last hook call = %v, want a panic error holding the value", last.err)
 			}
+
+			assertPanicHooks(t, calls, last.err, tt.reason)
 		})
 	}
 }
@@ -1621,6 +1801,7 @@ func TestRecover_HostileValue_NoHook(t *testing.T) {
 		value any
 	}{
 		{name: "is method panics", value: isPanicError{}},
+		{name: "self-loop", value: newLoop("loop")},
 	}
 
 	for _, tt := range tests {
@@ -1631,11 +1812,475 @@ func TestRecover_HostileValue_NoHook(t *testing.T) {
 
 			// The second request shows the handler still serves.
 			for i := range 2 {
-				if rec := serveContained(t, handler); rec.Code != 500 {
+				if rec := serveWithin(t, handler); rec.Code != 500 {
 					t.Errorf("request %d: status = %d, want 500", i+1, rec.Code)
 				}
 			}
 		})
+	}
+}
+
+// assertNilPanicReport checks the safe 500 for GET /v1/vessels/7 and that
+// the hook received exactly one panic error with value nil.
+func assertNilPanicReport(t *testing.T, rec *httptest.ResponseRecorder, r *recorder) {
+	t.Helper()
+
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != safe500 {
+		t.Errorf("got %d %q, want 500 %s", rec.Code, rec.Body, safe500)
+	}
+
+	if got := rec.Header().Get("Content-Type"); got != problemJSONType {
+		t.Errorf("Content-Type = %q, want %s", got, problemJSONType)
+	}
+
+	calls := r.recorded()
+	if len(calls) != 1 {
+		t.Fatalf("hook calls = %d, want one panic error with value nil", len(calls))
+	}
+
+	if pe, ok := errors.AsType[*prblm.PanicError](calls[0].err); !ok || pe.Value != nil || calls[0].status != 500 {
+		t.Errorf("hook call = %v (problem %d), want a panic error with value nil and the 500 problem", calls[0].err, calls[0].status)
+	}
+}
+
+// goexitUnwrapError is an error whose Unwrap calls runtime.Goexit.
+type goexitUnwrapError struct{}
+
+func (goexitUnwrapError) Error() string { return "goexit" }
+
+func (goexitUnwrapError) Unwrap() error {
+	runtime.Goexit()
+
+	return nil
+}
+
+// A runtime.Goexit inside the walk of an error never produces an
+// ErrUnwalkableError note: the walk records an abort, but the goroutine goes
+// on exiting before Respond can report it. Recover answers the Goexit as a
+// panic with value nil, its only report.
+func TestRecover_GoexitInErrorMethod(t *testing.T) {
+	t.Parallel()
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	handler := h.Recover(h.Wrap(func(http.ResponseWriter, *http.Request) error { return goexitUnwrapError{} }))
+
+	rec := httptest.NewRecorder()
+	serveGoexit(t, handler, rec)
+
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != safe500 {
+		t.Errorf("got %d %q, want 500 %s", rec.Code, rec.Body, safe500)
+	}
+
+	calls := r.recorded()
+	if len(calls) != 1 {
+		t.Fatalf("hook calls = %+v, want only the Goexit's report", calls)
+	}
+
+	if errors.Is(calls[0].err, prblm.ErrUnwalkableError) {
+		t.Errorf("hook received a note %v, want none", calls[0].err)
+	}
+
+	if pe, ok := errors.AsType[*prblm.PanicError](calls[0].err); !ok || pe.Value != nil {
+		t.Errorf("hook received %v, want a panic error with value nil", calls[0].err)
+	}
+}
+
+// panic-recovery / Scenario: Hostile panic value, the panic(nil) row. Under
+// GODEBUG=panicnil=1, recover returns nil for panic(nil): Recover tells the
+// panic apart by the handler not returning, so it is answered and reported
+// like any other.
+func TestRecover_HostileValue_PanicNil(t *testing.T) {
+	t.Parallel()
+
+	if rerunUnderPanicNil(t) {
+		return
+	}
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	rec := serveWithin(t, h.Recover(panicking(nilValue)))
+
+	assertNilPanicReport(t, rec, &r)
+}
+
+// A handler that calls runtime.Goexit (t.FailNow in a test) does not return
+// either, and recover cannot tell it from panic(nil) under panicnil=1: the
+// request is answered with the safe 500 and the hook receives a panic error
+// with value nil, instead of the request being left unanswered.
+func TestRecover_Goexit(t *testing.T) {
+	t.Parallel()
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	rec := httptest.NewRecorder()
+
+	serveGoexit(t, h.Recover(exiting()), rec)
+
+	assertNilPanicReport(t, rec, &r)
+
+	if !rec.Flushed {
+		t.Error("the problem was not flushed, so net/http would never send it")
+	}
+}
+
+// Over a real server, Goexit ends the goroutine before net/http finishes
+// the response: the problem reaches the client only because Recover flushes
+// it.
+func TestRecover_Goexit_RealServer(t *testing.T) {
+	t.Parallel()
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	srv := httptest.NewServer(h.Recover(exiting()))
+	t.Cleanup(srv.Close)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/v1/vessels/7", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v (the client got no answer)", err)
+	}
+
+	defer func() { _ = res.Body.Close() }()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("reading the body: %v", err)
+	}
+
+	if res.StatusCode != http.StatusInternalServerError || string(body) != safe500 {
+		t.Errorf("got %d %q, want 500 %s", res.StatusCode, body, safe500)
+	}
+
+	if got := res.Header.Get("Content-Type"); got != problemJSONType {
+		t.Errorf("Content-Type = %q, want %s", got, problemJSONType)
+	}
+
+	if calls := r.recorded(); len(calls) != 1 {
+		t.Errorf("hook calls = %d, want one panic error with value nil", len(calls))
+	}
+}
+
+// unwrappingWriter wraps a response writer, as a compressing middleware
+// would, and unwraps to it.
+type unwrappingWriter struct {
+	http.ResponseWriter
+}
+
+func (w unwrappingWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// panic-recovery / Scenario: Nested recovery. A real panic stops at the
+// inner Recover and is reported once. A runtime.Goexit goes on through the
+// outer one, which cannot tell it from a new panic(nil) (see
+// TestRecover_Nested_SecondPanicNil), so it reports it again, with a nil
+// problem since the inner one answered, even when a middleware between the
+// two wraps the writer. The client gets the inner one's problem.
+func TestRecover_Nested(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler http.Handler
+		// wrapped puts a middleware that wraps the writer between the two.
+		wrapped bool
+		value   any
+		// statuses are the problem statuses the hooks receive, in order; 0
+		// is a nil problem.
+		statuses []int
+	}{
+		{name: "panic", handler: panicking("boom"), value: "boom", statuses: []int{500}},
+		{name: "goexit", handler: exiting(), statuses: []int{500, 0}},
+		{name: "goexit through a wrapping middleware", handler: exiting(), wrapped: true, statuses: []int{500, 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var r recorder
+
+			h := prblm.NewHandler(prblm.OnError(r.hook))
+
+			inner := h.Recover(tt.handler)
+			if tt.wrapped {
+				recovering := inner
+				inner = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					recovering.ServeHTTP(unwrappingWriter{ResponseWriter: w}, r)
+				})
+			}
+
+			rec := httptest.NewRecorder()
+			serveGoexit(t, h.Recover(inner), rec)
+
+			if rec.Code != http.StatusInternalServerError || rec.Body.String() != safe500 {
+				t.Errorf("got %d %q, want 500 %s", rec.Code, rec.Body, safe500)
+			}
+
+			calls := r.recorded()
+			if len(calls) != len(tt.statuses) {
+				t.Fatalf("hook calls = %+v, want %d", calls, len(tt.statuses))
+			}
+
+			for i, call := range calls {
+				if call.status != tt.statuses[i] {
+					t.Errorf("hook call %d: problem status %d, want %d", i+1, call.status, tt.statuses[i])
+				}
+
+				if pe, ok := errors.AsType[*prblm.PanicError](call.err); !ok || pe.Value != tt.value {
+					t.Errorf("hook call %d received %v, want a panic error with value %v", i+1, call.err, tt.value)
+				}
+			}
+		})
+	}
+}
+
+// panic-recovery / Scenario: A second panic(nil) after nested recovery.
+// Under GODEBUG=panicnil=1, the inner Recover answers a real panic(nil) and
+// returns; a middleware between the two then panics with nil again. That is
+// a new panic, and the outer Recover reports it, with a nil problem since
+// the response has started.
+func TestRecover_Nested_SecondPanicNil(t *testing.T) {
+	t.Parallel()
+
+	if rerunUnderPanicNil(t) {
+		return
+	}
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	inner := h.Recover(panicking(nilValue))
+	middle := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		inner.ServeHTTP(w, req)
+		// The inner panic was answered; this is a new one.
+		panic(nilValue)
+	})
+
+	_ = serveWithin(t, h.Recover(middle))
+
+	calls := r.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("hook calls = %d (%+v), want 2: the inner panic(nil), then the middleware's", len(calls), calls)
+	}
+
+	for i, want := range []int{http.StatusInternalServerError, 0} {
+		if calls[i].status != want {
+			t.Errorf("hook call %d: problem status %d, want %d", i+1, calls[i].status, want)
+		}
+
+		if pe, ok := errors.AsType[*prblm.PanicError](calls[i].err); !ok || pe.Value != nil {
+			t.Errorf("hook call %d = %v, want a panic error with value nil", i+1, calls[i].err)
+		}
+	}
+}
+
+// panic-recovery / Scenario: Hostile panic value, the runtime.Goexit row over
+// HTTP/2. net/http's HTTP/2 server resets the stream of a handler that did
+// not return, so the client receives the flushed problem, status, headers
+// and every byte of the body, and then a stream reset with INTERNAL_ERROR.
+// The hooks are still told once.
+func TestRecover_Goexit_HTTP2(t *testing.T) {
+	t.Parallel()
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+
+	status, contentType, body, err := getHTTP2(t, h.Recover(exiting()))
+	if status != http.StatusInternalServerError || contentType != problemJSONType || body != safe500 {
+		t.Errorf("got %d %q %q, want 500 %s %s", status, contentType, body, problemJSONType, safe500)
+	}
+
+	if !isStreamReset(err) {
+		t.Errorf("reading the body: %v, want a stream reset with INTERNAL_ERROR after the body", err)
+	}
+
+	if calls := r.recorded(); len(calls) != 1 {
+		t.Errorf("hook calls = %d, want one panic error with value nil", len(calls))
+	}
+}
+
+// getHTTP2 serves GET /v1/vessels/7 with handler over HTTP/2 and TLS, and
+// returns what the client received within 1 second: the status, the
+// Content-Type, the body read and the error that ended reading it.
+func getHTTP2(t *testing.T, handler http.Handler) (status int, contentType, body string, err error) {
+	t.Helper()
+
+	srv := httptest.NewUnstartedServer(handler)
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/v1/vessels/7", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET over HTTP/2: %v (the client got no answer)", err)
+	}
+
+	defer func() { _ = res.Body.Close() }()
+
+	if res.ProtoMajor != 2 {
+		t.Fatalf("proto = %s, want HTTP/2", res.Proto)
+	}
+
+	b, err := io.ReadAll(res.Body)
+
+	return res.StatusCode, res.Header.Get("Content-Type"), string(b), err
+}
+
+// isStreamReset reports whether err is the error an HTTP/2 client reads
+// when the server resets the stream with INTERNAL_ERROR. net/http does not
+// export its HTTP/2 stream error type, so the message is matched.
+func isStreamReset(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "stream error") && strings.Contains(err.Error(), "INTERNAL_ERROR")
+}
+
+// unflushableWriter is a response writer with no Flush method and nothing
+// to unwrap, so it cannot flush.
+type unflushableWriter struct {
+	http.ResponseWriter
+}
+
+// A writer that cannot flush still gets the problem written, and the flush
+// error goes nowhere: nothing panics and nothing more is reported.
+func TestRecover_Goexit_UnflushableWriter(t *testing.T) {
+	t.Parallel()
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	rec := httptest.NewRecorder()
+
+	serveGoexit(t, h.Recover(exiting()), unflushableWriter{ResponseWriter: rec})
+
+	assertNilPanicReport(t, rec, &r)
+
+	if rec.Flushed {
+		t.Error("the recorder was flushed through a writer that cannot flush")
+	}
+}
+
+// flushPanicWriter is a response writer whose Flush panics.
+type flushPanicWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (flushPanicWriter) Flush() { panic("flush broke") }
+
+// A writer whose Flush panics is broken like one whose Write panics: the
+// problem is already written, and the second panic only reaches the hook.
+func TestRecover_Goexit_FlushPanics(t *testing.T) {
+	t.Parallel()
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	rec := httptest.NewRecorder()
+
+	serveGoexit(t, h.Recover(exiting()), flushPanicWriter{ResponseRecorder: rec})
+
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != safe500 {
+		t.Errorf("got %d %q, want 500 %s", rec.Code, rec.Body, safe500)
+	}
+
+	calls := r.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("hook calls = %d, want the Goexit, then the writer's panic", len(calls))
+	}
+
+	if pe, ok := errors.AsType[*prblm.PanicError](calls[1].err); !ok || pe.Value != "flush broke" || calls[1].status != 0 {
+		t.Errorf("second hook call = %v (problem %d), want the writer's panic and no problem", calls[1].err, calls[1].status)
+	}
+}
+
+// exiting returns a handler that calls runtime.Goexit.
+func exiting() http.Handler {
+	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) { runtime.Goexit() })
+}
+
+// serveGoexit serves GET /v1/vessels/7 to w with handler, on a goroutine of
+// its own, since the handler may end it with runtime.Goexit, and fails the
+// test unless it is done within 1 second.
+func serveGoexit(t *testing.T, handler http.Handler, w http.ResponseWriter) {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/vessels/7", http.NoBody)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		handler.ServeHTTP(w, req)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("the handler did not finish within 1s")
+	}
+}
+
+// nilPanicWriter is a response writer whose Header calls panic(nil) once.
+type nilPanicWriter struct {
+	*httptest.ResponseRecorder
+
+	panicked bool
+}
+
+func (w *nilPanicWriter) Header() http.Header {
+	if !w.panicked {
+		w.panicked = true
+
+		panic(nilValue)
+	}
+
+	return w.ResponseRecorder.Header()
+}
+
+// A writer that calls panic(nil) while the problem is written, under
+// GODEBUG=panicnil=1, is a second panic like any other: it is reported, and
+// the constant minimal problem is written.
+func TestRecover_Faulty_WriterPanicsNil(t *testing.T) {
+	t.Parallel()
+
+	if rerunUnderPanicNil(t) {
+		return
+	}
+
+	var r recorder
+
+	h := prblm.NewHandler(prblm.OnError(r.hook))
+	w := &nilPanicWriter{ResponseRecorder: httptest.NewRecorder()}
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/vessels/7", http.NoBody)
+
+	h.Recover(panicking("boom")).ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError || w.Body.String() != `{"title":"Internal Server Error","status":500}` {
+		t.Errorf("got %d %q, want 500 and the minimal problem", w.Code, w.Body)
+	}
+
+	calls := r.recorded()
+	if len(calls) != 2 {
+		t.Fatalf("hook calls = %d, want the panic, then the writer's panic", len(calls))
+	}
+
+	if pe, ok := errors.AsType[*prblm.PanicError](calls[1].err); !ok || pe.Value != nil || calls[1].status != 0 {
+		t.Errorf("second hook call = %v (problem %d), want a panic error with value nil and no problem", calls[1].err, calls[1].status)
 	}
 }
 

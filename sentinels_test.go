@@ -2,6 +2,7 @@ package prblm_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/kartaladev/prblm"
+	"github.com/kartaladev/prblm/internal/statushint"
 )
 
 // VesselMissingError is a domain error that reports itself as
@@ -410,11 +412,8 @@ func TestSentinels_Override(t *testing.T) {
 	}
 }
 
-// anyPanics asks assertHookCalls for one or more panic notes.
-const anyPanics = -1
-
-// assertHookCalls checks that the hook received panics panic notes (one or
-// more for anyPanics) and then err itself, with a problem of status.
+// assertHookCalls checks that the hook received panics panic notes and then
+// err itself, with a problem of status.
 func assertHookCalls(t *testing.T, calls []hookCall, err error, status, panics int) {
 	t.Helper()
 
@@ -424,8 +423,8 @@ func assertHookCalls(t *testing.T, calls []hookCall, err error, status, panics i
 
 	notes, last := calls[:len(calls)-1], calls[len(calls)-1]
 
-	if panics == anyPanics && len(notes) == 0 || panics != anyPanics && len(notes) != panics {
-		t.Errorf("hook notes = %v, want %d panic notes (-1: one or more)", notes, panics)
+	if len(notes) != panics {
+		t.Errorf("hook notes = %v, want %d panic notes", notes, panics)
 	}
 
 	for _, n := range notes {
@@ -591,22 +590,41 @@ type panickyIsError struct{}
 func (panickyIsError) Error() string { return "panicky is" }
 func (panickyIsError) Is(error) bool { panic("is broke") }
 
-// error-sentinels / Scenario: Degenerate inputs.
-func TestSentinels_Degenerate(t *testing.T) {
+// loopNotFoundError's Unwrap() error returns itself, and its Is method
+// reports prblm.ErrNotFound.
+type loopNotFoundError struct{}
+
+func (*loopNotFoundError) Error() string        { return "loop not found" }
+func (e *loopNotFoundError) Unwrap() error      { return e }
+func (*loopNotFoundError) Is(target error) bool { return target == prblm.ErrNotFound }
+
+// error-sentinels / Scenario: Degenerate inputs. A typed nil is skipped
+// without calling its methods; a panicking Is method or a cycle aborts the
+// walk, which the hook learns from one ErrUnwalkableError note.
+func TestResolve_Degenerate(t *testing.T) {
 	t.Parallel()
 
 	var typedNil *myError
+
+	const notFound = "The requested resource was not found."
 
 	tests := []struct {
 		name    string
 		err     error
 		written bool
-		panics  bool
+		status  int
+		detail  string
+		// note is the reason of the expected ErrUnwalkableError note, or ""
+		// when the hook receives the error alone.
+		note string
 	}{
 		{name: "nil", err: nil},
 		{name: "hint on nil", err: prblm.WithStatus(nil, 404)},
-		{name: "typed nil", err: typedNil, written: true},
-		{name: "panicking is", err: panickyIsError{}, written: true, panics: true},
+		{name: "typed nil", err: typedNil, written: true, status: 500},
+		{name: "typed nil with a value-receiver is method", err: (*valueIsError)(nil), written: true, status: 500},
+		{name: "typed nil joined with a sentinel", err: errors.Join(typedNil, prblm.ErrNotFound), written: true, status: 404, detail: notFound},
+		{name: "panicking is", err: panickyIsError{}, written: true, status: 500, note: "panic"},
+		{name: "self-loop reporting a sentinel", err: &loopNotFoundError{}, written: true, status: 500, note: "budget"},
 	}
 
 	for _, tt := range tests {
@@ -615,7 +633,7 @@ func TestSentinels_Degenerate(t *testing.T) {
 
 			var hook recorder
 
-			rec := writeAccept(t, prblm.NewHandler(prblm.OnError(hook.hook)), "", tt.err)
+			rec := writeWithin(t, prblm.NewHandler(prblm.OnError(hook.hook)), tt.err)
 			calls := hook.recorded()
 
 			if !tt.written {
@@ -626,14 +644,108 @@ func TestSentinels_Degenerate(t *testing.T) {
 				return
 			}
 
-			assertStatusDetail(t, rec, 500, "")
+			assertStatusDetail(t, rec, tt.status, tt.detail)
 
-			panics := 0
-			if tt.panics {
-				panics = anyPanics
+			if tt.note != "" {
+				_ = assertNoted(t, calls, tt.err, tt.note)
+
+				return
 			}
 
-			assertHookCalls(t, calls, tt.err, 500, panics)
+			assertHookCalls(t, calls, tt.err, tt.status, 0)
+		})
+	}
+}
+
+// error-chain-walk / Scenario: First match follows errors.Is order. The
+// first match in the order errors.Is walks the chain decides.
+func TestResolve_WalkOrder(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{name: "wrapped sentinel", err: fmt.Errorf("vessel 7: %w", prblm.ErrNotFound), status: 404},
+		{name: "joined sentinels", err: errors.Join(prblm.ErrNotFound, prblm.ErrConflict), status: 404},
+		{
+			name:   "nested join, depth first",
+			err:    errors.Join(errors.Join(errors.New("a"), prblm.ErrConflict), prblm.ErrNotFound),
+			status: 409,
+		},
+		{name: "problem before a sentinel", err: errors.Join(prblm.New(422), prblm.ErrNotFound), status: 422},
+		{name: "hint around a sentinel", err: prblm.WithStatus(prblm.ErrNotFound, 410), status: 410},
+		// A hint and a sentinel side by side: the first in errors.Is order
+		// decides. v0.2.1 let the sentinel win over a hint before it (404).
+		{name: "hint before a sibling sentinel", err: errors.Join(prblm.WithStatus(errors.New("x"), 418), prblm.ErrNotFound), status: 418},
+		{name: "sentinel before a sibling hint", err: errors.Join(prblm.ErrNotFound, prblm.WithStatus(errors.New("x"), 418)), status: 404},
+		// Examples: degenerate chains.
+		{name: "unwrap returns nil", err: unwrapsNilError{}, status: 500},
+		{name: "empty unwrap list", err: listError{}, status: 500},
+		{name: "nil list entry", err: listError{nil, prblm.ErrNotFound}, status: 404},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if rec := writeWithin(t, prblm.NewHandler(), tt.err); rec.Code != tt.status {
+				t.Errorf("status = %d, want %d", rec.Code, tt.status)
+			}
+		})
+	}
+}
+
+// valueUnwrapError has a value-receiver Unwrap, so calling it through a nil
+// *valueUnwrapError panics.
+type valueUnwrapError struct{}
+
+func (valueUnwrapError) Error() string { return "value unwrap" }
+func (valueUnwrapError) Unwrap() error { return prblm.ErrConflict }
+
+// notFoundSliceError is an error of a slice kind reporting prblm.ErrNotFound,
+// so a nil notFoundSliceError is a valid error.
+type notFoundSliceError []int
+
+func (notFoundSliceError) Error() string        { return "not found slice" }
+func (notFoundSliceError) Is(target error) bool { return target == prblm.ErrNotFound }
+
+// error-chain-walk / Scenario: Typed nil in the chain. A nil pointer is never
+// matched and none of its methods is called; nil slices are walked.
+func TestResolve_WalkTypedNil(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{name: "typed-nil problem before a problem", err: errors.Join((*prblm.Problem)(nil), prblm.New(404)), status: 404},
+		{name: "typed-nil max bytes error", err: errors.Join((*http.MaxBytesError)(nil), sql.ErrConnDone), status: 500},
+		{name: "typed-nil syntax error before a sentinel", err: errors.Join((*json.SyntaxError)(nil), prblm.ErrConflict), status: 409},
+		{name: "typed nil with a value-receiver is method", err: (*valueIsError)(nil), status: 500},
+		{name: "typed nil with a value-receiver unwrap", err: errors.Join((*valueUnwrapError)(nil), prblm.ErrNotFound), status: 404},
+		{name: "typed-nil root without methods", err: (*myError)(nil), status: 500},
+		{name: "nil slice reporting a sentinel", err: fmt.Errorf("x: %w", notFoundSliceError(nil)), status: 404},
+		// The adapters' hint wrapper is an ordinary typed nil when nil: a
+		// consumer can make one with reflect.Zero from the error its hook
+		// receives. It carries no hint, so the safe 500 answers it.
+		{name: "typed-nil adapter hint root", err: (*statushint.Error)(nil), status: 500},
+		{name: "adapter hint around a typed-nil adapter hint", err: statushint.Wrap((*statushint.Error)(nil), 409), status: 409},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var hook recorder
+
+			if rec := writeWithin(t, prblm.NewHandler(prblm.OnError(hook.hook)), tt.err); rec.Code != tt.status {
+				t.Errorf("status = %d, want %d", rec.Code, tt.status)
+			}
+
+			assertHookCalls(t, hook.recorded(), tt.err, tt.status, 0)
 		})
 	}
 }
