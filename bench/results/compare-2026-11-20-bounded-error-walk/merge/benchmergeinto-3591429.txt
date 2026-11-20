@@ -1,0 +1,70 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 7312071	       145.9 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3646874	       330.8 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8182533	       144.5 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3577443	       334.7 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8185784	       144.5 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3623562	       331.9 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8221052	       145.9 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3602350	       332.7 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8269461	       144.8 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3611666	       332.0 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8211678	       146.1 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3612369	       333.7 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8185144	       144.7 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3607616	       331.8 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8146171	       148.4 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3592246	       335.3 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8337790	       144.5 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3615459	       331.3 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkMergeInto/empty-14         	 8231842	       146.4 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14    	 3563144	       336.0 ns/op	      64 B/op	       4 allocs/op
+PASS

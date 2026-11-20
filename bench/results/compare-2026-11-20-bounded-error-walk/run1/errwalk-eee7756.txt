@@ -1,0 +1,80 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38667993	        30.90 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	19136174	        62.36 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4887681	       245.8 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	39083067	        32.08 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	18711406	        64.98 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4592727	       254.1 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38773675	        31.36 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	18949174	        64.04 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4835653	       248.7 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	31875189	        31.82 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	17954294	        63.98 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4813102	       251.0 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38810773	        31.95 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	18790296	        64.03 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4818838	       249.7 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38180032	        31.14 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	18893967	        63.22 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4807585	       249.1 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38447982	        31.50 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	19273586	        61.65 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4813034	       249.8 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38179474	        31.75 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	18580836	        63.82 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4739034	       256.5 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	38278987	        31.67 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	18895430	        63.70 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4792458	       251.1 ns/op	     480 B/op	       2 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm/internal/errwalk
+cpu: Apple M4 Pro
+BenchmarkNew/entries=1-14         	39298573	        30.86 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=4-14         	19409270	        62.23 ns/op	     224 B/op	       1 allocs/op
+BenchmarkNew/entries=16-14        	 4827196	       250.2 ns/op	     480 B/op	       2 allocs/op
+PASS

@@ -1,0 +1,31 @@
+package prblm_test
+
+import (
+	"net/http"
+	"testing"
+
+	"github.com/kartaladev/prblm"
+)
+
+func BenchmarkZZMergeInto(b *testing.B) {
+	h := prblm.NewHandler()
+	res, _ := h.Respond(b.Context(), prblm.Request{Method: http.MethodGet, Path: "/x"}, prblm.ErrNotFound)
+	dst := make(http.Header)
+	for b.Loop() {
+		clear(dst)
+		res.MergeInto(dst)
+	}
+}
+
+func BenchmarkZZMergeIntoSet(b *testing.B) {
+	h := prblm.NewHandler()
+	res, _ := h.Respond(b.Context(), prblm.Request{Method: http.MethodGet, Path: "/x"}, prblm.ErrNotFound)
+	dst := make(http.Header)
+	for b.Loop() {
+		clear(dst)
+		dst["X-Request-Id"] = []string{"a"}
+		dst["Cache-Control"] = []string{"no-cache"}
+		dst["Vary"] = []string{"Origin"}
+		res.MergeInto(dst)
+	}
+}

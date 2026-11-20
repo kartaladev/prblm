@@ -56,8 +56,10 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
 - `Is`, `As` and `Status` mappers called directly through `MapError` no longer look up the status
   hint they never use, so an `As` method of the error past the match can no longer make them
   decline.
-- Resolution walks the error once instead of about nine times for an unrecognized error. The
-  benchmarks are in [BENCHMARKS.md](BENCHMARKS.md).
+- Resolution walks the error once instead of about nine times for an unrecognized error. Against
+  v0.2.1, a problem response allocates as often and 112 to 128 bytes more (the walk), and takes up
+  to 2% longer in net/http and gin, the same in fiber. The benchmarks are in
+  [BENCHMARKS.md](BENCHMARKS.md).
 
 ### Fixed
 
@@ -94,7 +96,8 @@ Each module has its own tags (see [RELEASING.md](RELEASING.md)). This file cover
   header's name is now folded into the canonical name before the merge rules apply (the canonical
   key's values first, then the others in sorted key order), and the other spellings are deleted.
   Keys of headers the response does not set are left as they are. A handler that sets headers with
-  `Header().Set` or `Add`, the common case, pays one pass over its header keys and no allocation.
+  `Header().Set` or `Add`, the common case, pays one pass over its header keys and no allocation; an
+  empty header pays nothing.
 - Building the `ErrUnwalkableError` note no longer formats the panic value, so a panic value whose
   `Error` method panics (an `Is` method that panics with such an error) can no longer make
   `Respond`, `Wrap`, `Recover` or `RespondPanic` panic. The note's message names only the value's

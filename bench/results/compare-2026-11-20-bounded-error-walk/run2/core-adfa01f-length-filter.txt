@@ -1,0 +1,310 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	64158462	        18.48 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	121233163	         9.896 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	287064943	         4.193 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8292147	       143.3 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7431024	       163.4 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15550226	        77.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15268519	        77.48 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11062226	       105.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3812901	       314.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	10152072	       120.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20503239	        58.34 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10723496	       112.4 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1178 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  926876	      1275 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  821054	      1468 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  924282	      1298 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1926944	       620.9 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2138998	       568.9 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6707014	       177.2 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4584158	       261.6 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3399268	       353.2 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	  101313	     11900 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1319990	       911.5 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1189 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8330821	       144.8 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4152631	       289.2 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	65438034	        18.76 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	121062865	         9.933 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	281233658	         4.263 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8160789	       144.7 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7295773	       163.9 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15637784	        77.36 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15501956	        78.04 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11572719	       107.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3838141	       312.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9733326	       122.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20451306	        58.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10876904	       109.5 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1189 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  945135	      1282 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  797768	      1483 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  909314	      1295 ns/op	    2061 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1963909	       612.7 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2113708	       567.7 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6589734	       179.6 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4524177	       263.2 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3345502	       358.3 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   98516	     12140 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1311525	       913.4 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1189 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8323056	       147.6 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4029313	       296.8 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	62962518	        18.61 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	123986341	         9.628 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	284017394	         4.269 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8300703	       142.9 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7306513	       164.2 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15711458	        76.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15443103	        77.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11568973	       105.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3839580	       313.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9744279	       119.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20523696	        58.46 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10652092	       111.6 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1174 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  884031	      1279 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  826358	      1458 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  918200	      1282 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1965058	       611.3 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2114134	       570.5 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6710233	       179.1 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4583994	       262.8 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3362143	       356.0 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   99663	     12162 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1327050	       903.9 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	  999777	      1192 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8379558	       144.0 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4150759	       289.7 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	65201444	        18.60 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	121377733	         9.809 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	285015206	         4.149 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8379034	       143.7 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7199976	       164.9 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15660344	        77.57 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15002984	        78.47 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	10780762	       109.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3800208	       316.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9749554	       122.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20710603	        58.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10710627	       111.2 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1182 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  942765	      1281 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  814287	      1485 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  924024	      1286 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1942755	       619.4 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2078832	       577.1 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6709948	       179.3 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4523113	       264.1 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3346180	       358.7 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   98818	     12124 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1316559	       913.6 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1189 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8338257	       144.3 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4155988	       289.0 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	63275566	        18.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	125108574	         9.573 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	294436348	         4.096 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8362543	       142.6 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7339892	       162.7 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15633091	        76.33 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15593038	        77.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11451428	       103.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3950142	       305.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	10056192	       119.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20492925	        58.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10692772	       109.5 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1185 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  934851	      1271 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  818744	      1474 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  893182	      1303 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1930298	       620.8 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2089357	       569.7 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6635553	       179.5 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4550133	       264.4 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3315680	       360.8 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   99133	     12172 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1316346	       912.0 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1200 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8262543	       144.5 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4132731	       289.0 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	62830240	        18.48 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	125627154	         9.599 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	277429090	         4.249 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8376482	       142.2 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7374793	       162.1 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15658351	        76.85 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15339710	        77.12 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11394820	       104.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3914022	       305.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	10103568	       119.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20421562	        58.27 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10841299	       111.2 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1181 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  947535	      1282 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  818385	      1480 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  928471	      1313 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1936182	       627.1 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2066551	       576.8 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6650529	       179.8 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4509265	       265.1 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3282153	       362.4 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   99198	     12135 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1308955	       918.1 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	  987220	      1200 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8242653	       144.4 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4120630	       291.7 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	63441014	        18.56 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	123379418	         9.742 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	287650992	         4.274 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8317726	       145.9 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7265335	       165.2 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15479443	        77.56 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	14854809	        79.05 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	10807917	       108.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3772597	       314.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9895906	       123.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20572015	        60.42 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10244928	       115.9 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	  906156	      1242 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  939554	      1311 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  777190	      1524 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  914253	      1359 ns/op	    2061 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1854380	       639.5 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2075539	       578.7 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6609451	       182.7 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4438158	       269.2 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3254068	       362.4 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   98526	     12361 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1297189	       930.7 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1209 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8299474	       146.1 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4112882	       292.4 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	62871524	        18.91 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	123400965	         9.680 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	295568322	         4.196 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8409477	       142.2 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7302225	       163.6 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15603826	        77.16 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15419539	        77.83 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11572570	       106.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3866077	       310.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9839946	       119.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20064974	        59.42 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10690284	       111.1 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1185 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  945331	      1283 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  791584	      1484 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  929499	      1298 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1925730	       623.3 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2077126	       578.5 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6712911	       178.0 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4546353	       263.2 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3331994	       360.0 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   99556	     12180 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1311182	       913.3 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1192 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8289634	       144.7 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4120837	       291.3 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	64338564	        19.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	124217734	         9.661 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	292702945	         4.149 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8358864	       143.3 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7257367	       163.7 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15599094	        77.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15692205	        77.43 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11245316	       105.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3866976	       310.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9681032	       120.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20664951	        58.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10493286	       111.1 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1179 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  932192	      1287 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  806073	      1484 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  910383	      1300 ns/op	    2061 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1933641	       622.4 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2075916	       578.9 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6603352	       179.2 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4514406	       265.2 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3358888	       357.7 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   98354	     12159 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1314319	       913.4 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	 1000000	      1201 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8396187	       143.8 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4157762	       288.2 ns/op	      64 B/op	       4 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/kartaladev/prblm
+cpu: Apple M4 Pro
+BenchmarkIsSubtype-14      	64304088	        18.41 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/resolved-14         	121236357	         9.897 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/kept-14             	288845508	         4.137 ns/op	       0 B/op	       0 allocs/op
+BenchmarkResolveType/invalid-14          	 8362485	       142.7 ns/op	     112 B/op	       3 allocs/op
+BenchmarkResolveType/undocumented-14     	 7343592	       163.4 ns/op	     128 B/op	       3 allocs/op
+BenchmarkNegotiate/empty-14              	15795258	        76.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/any-14                	15422924	        77.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/json-14               	11321586	       106.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/browser-14            	 3869368	       310.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/xml-14                	 9632421	       123.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkNegotiate/malformed-14          	20577130	        58.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWrap/baseline-14                	10847052	       109.6 ns/op	      32 B/op	       2 allocs/op
+BenchmarkWrap/mapped-json-14             	 1000000	      1188 ns/op	    1817 B/op	      25 allocs/op
+BenchmarkWrap/fallback-500-14            	  953319	      1271 ns/op	    1737 B/op	      24 allocs/op
+BenchmarkWrap/xml-14                     	  819054	      1467 ns/op	    2371 B/op	      38 allocs/op
+BenchmarkWrap/resolved-type-14           	  919918	      1292 ns/op	    2060 B/op	      26 allocs/op
+BenchmarkWrap/discovery-200-14           	 1936208	       620.1 ns/op	     176 B/op	       9 allocs/op
+BenchmarkWrap/discovery-304-14           	 2123996	       565.9 ns/op	     128 B/op	       6 allocs/op
+BenchmarkResolve/mapped-14               	 6715926	       179.3 ns/op	     704 B/op	       5 allocs/op
+BenchmarkResolve/fallback-14             	 4565638	       264.4 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/wrapped-14              	 3320874	       359.6 ns/op	     576 B/op	       4 allocs/op
+BenchmarkResolve/unwalkable-14           	   95490	     12205 ns/op	   35736 B/op	      14 allocs/op
+BenchmarkRespond/json-14                 	 1309486	       916.2 ns/op	    1713 B/op	      19 allocs/op
+BenchmarkRespond/xml-14                  	  995007	      1198 ns/op	    2267 B/op	      32 allocs/op
+BenchmarkMergeInto/empty-14              	 8288792	       144.7 ns/op	      64 B/op	       4 allocs/op
+BenchmarkMergeInto/middleware-14         	 4107898	       292.7 ns/op	      64 B/op	       4 allocs/op
+PASS
