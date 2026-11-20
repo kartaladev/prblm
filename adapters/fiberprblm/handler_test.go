@@ -948,7 +948,7 @@ func (canceledTargetPanicError) Is(target error) bool {
 }
 
 // fiber-adapter / Scenarios: Errors whose chain only the adapter cannot walk
-// (Fiber errors are status hints without their message; Client went away;
+// (Errors the adapter cannot walk get no fiber hint; Client went away;
 // Route-not-found check cannot finish).
 // The adapter's own walk aborts on a panic for its target alone, so the
 // error gets no hint, or counts as from a client still there, and the core,

@@ -495,7 +495,7 @@ A received problem anywhere in the error chain SHALL NOT reach the client: none 
 | fiber error handler | 502 | `{"title":"Bad Gateway","status":502,"detail":"An upstream service returned an invalid response.","instance":"/vessels/7"}` |
 
 ### Requirement: Error values with panicking methods never break resolution
-An error whose own methods panic while the handler resolves it SHALL NOT crash the request; this covers an `Unwrap`, `Is` or `As` method. The panic SHALL abort the walk of the chain, and the answer SHALL be the safe 500 problem, even when another step would have matched. The hooks SHALL receive one `ErrUnwalkableError` note with reason `panic`, wrapping a panic error, then the error. An `As` method reporting a match with an empty pointer or interface target SHALL count as no match, not as a panic.
+An error whose own `Unwrap`, `Is` or `As` method panics during resolution SHALL NOT crash the request. The panic SHALL abort the chain's walk, and the answer SHALL be the safe 500 problem even when another step would have matched. The hooks SHALL receive one `ErrUnwalkableError` note with reason `panic`, wrapping a panic error, then the error. An `As` method that reports a match but leaves a pointer or interface target empty SHALL count as no match, not as a panic.
 
 #### Scenario: Error methods panic
 - **Given** a handler with `<setup>` and a recording hook
