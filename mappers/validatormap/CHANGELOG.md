@@ -7,6 +7,8 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `mappers/va
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-20
+
 ### Fixed
 
 - A translator function, or a translation, that calls `panic(nil)` under `GODEBUG=panicnil=1` is
@@ -21,5 +23,6 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `mappers/va
 
 First release, with core v0.1.0.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/mappers/validatormap/v0.1.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/mappers/validatormap/v0.1.1...HEAD
+[0.1.1]: https://github.com/kartaladev/prblm/compare/mappers/validatormap/v0.1.0...mappers/validatormap/v0.1.1
 [0.1.0]: https://github.com/kartaladev/prblm/releases/tag/mappers/validatormap/v0.1.0
