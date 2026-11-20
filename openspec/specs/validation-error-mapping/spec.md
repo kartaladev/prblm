@@ -222,7 +222,7 @@ Consumers SHALL be able to supply a function that picks a translator from the re
 | (no translator function) | `failed validation: min` |
 
 ### Requirement: Translator panics are contained once
-A panic in the translator function or in a translation SHALL still produce the validation problem. The first panic SHALL be the problem's cause, a `*prblm.PanicError` with its stack, so the handler's `OnError` hook can find it; later panics for the same problem SHALL use the default message without capturing another stack. A panic SHALL be told apart by the call not returning normally, not by the value `recover` returns, so `panic(nil)` is contained and reported under `GODEBUG=panicnil=1` too, as a `*prblm.PanicError` with a nil value. A panic with `http.ErrAbortHandler` SHALL NOT be recovered, so net/http aborts the response, as the core does.
+A panic in the translator function or in a translation SHALL still produce the validation problem. The first panic SHALL be the problem's cause, a `*prblm.PanicError` with its stack; later panics for the same problem SHALL use the default message without another stack. A panic SHALL be told apart by the call not returning normally, so `panic(nil)` is reported under `GODEBUG=panicnil=1` too. A panic with `http.ErrAbortHandler` SHALL NOT be recovered, so net/http aborts the response.
 
 #### Scenario: Panicking translations
 - **Given** the validation mapper registered with a translator function that `<translator>`
