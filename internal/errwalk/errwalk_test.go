@@ -242,7 +242,7 @@ func TestNew_Budget(t *testing.T) {
 }
 
 // The fan-out is refused before a single child is pushed, so a huge
-// Unwrap() []error costs no more than the walk itself.
+// Unwrap() []error costs only the Abort the walk records.
 //
 //nolint:paralleltest // AllocsPerRun counts every allocation in the process
 func TestNew_BudgetAllocs(t *testing.T) {
@@ -773,10 +773,8 @@ func TestWalk_Allocs(t *testing.T) {
 	}
 }
 
-// The handler keeps its walk across the resolution steps, so the walk
-// escapes and every resolution allocates one Walk: its size is paid on
-// every problem response. It must fit the 112-byte size class, as measured
-// against v0.2.1 (bench/results/compare-2026-11-20-bounded-error-walk/).
+// The handler's walk escapes, so every resolution allocates one Walk: it
+// must stay in the 112-byte size class.
 func TestWalk_Size(t *testing.T) {
 	t.Parallel()
 

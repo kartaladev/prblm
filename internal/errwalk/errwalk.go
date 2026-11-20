@@ -45,10 +45,8 @@ type Abort struct {
 // longer chain moves them to more.
 //
 // A walk the handler keeps escapes, so its size is paid on every
-// resolution: it fits the 112-byte size class, half of the 224 bytes it took
-// with the abort held by value and eight inline entries (see
-// bench/results/compare-2026-11-20-bounded-error-walk/). buf holds the
-// common chain of 1 to 4 entries, and only an aborted walk allocates its
+// resolution: it stays in the 112-byte size class (TestWalk_Size). buf holds
+// the common chain of 1 to 4 entries, and only an aborted walk allocates its
 // Abort.
 type Walk struct {
 	// abort is why the walk stopped, or nil when it did not.

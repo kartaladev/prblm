@@ -79,15 +79,11 @@ func (r Response) MergeInto(dst http.Header) {
 		return
 	}
 
-	// An empty dst, as before the handler wrote any header, has nothing to
-	// fold; skipping it saves ranging over the map.
-	if len(dst) > 0 {
-		foldSpellings(dst, func(name string) bool {
-			_, ok := r.Header[name]
+	foldSpellings(dst, func(name string) bool {
+		_, ok := r.Header[name]
 
-			return ok
-		})
-	}
+		return ok
+	})
 
 	for name, values := range r.Header {
 		switch {
@@ -236,6 +232,12 @@ func canonicalize(h http.Header) http.Header {
 // common case is one pass over h that allocates nothing:
 // [http.CanonicalHeaderKey] returns a canonical key as it is.
 func foldSpellings(h http.Header, folds func(name string) bool) {
+	// An empty h, as before a handler writes any header, has nothing to
+	// fold; returning at once saves ranging over the map.
+	if len(h) == 0 {
+		return
+	}
+
 	var spellings []string
 
 	for key := range h {

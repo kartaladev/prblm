@@ -386,7 +386,10 @@ func BenchmarkRespond(b *testing.B) {
 // BenchmarkMergeInto measures merging a problem response's headers into the
 // response writer's: into an empty header, as the request-path benchmarks
 // do, and into one middleware already filled, where each key is checked for
-// a non-canonical spelling of the response's header names.
+// a non-canonical spelling of the response's header names. Each iteration
+// also refills the header, a few map writes that are the same in every
+// version, so compare a case across versions rather than read its absolute
+// time as MergeInto's.
 func BenchmarkMergeInto(b *testing.B) {
 	h := prblm.NewHandler(benchOptions()...)
 	req := prblm.Request{Method: http.MethodGet, Path: benchPathVessel}
