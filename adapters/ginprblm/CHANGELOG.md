@@ -9,11 +9,12 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-20
+
 ### Changed
 
-- Requires core v0.3.0, which brings the bounded error walk (listed under [Unreleased] in the
-  core's [CHANGELOG.md](../../CHANGELOG.md) until it is tagged). Until then, `go.mod` replaces the
-  core with `../..`, so this module is not releasable yet.
+- Requires core v0.3.0, which brings the bounded error walk (see the core's
+  [CHANGELOG.md](../../CHANGELOG.md), version 0.3.0).
 - `Recovery` answers panics through the core's `prblm.Handler.RespondPanic`, so a panic is
   answered as the core's net/http `Recover` answers it. The hooks now receive the
   `*prblm.PanicError` itself rather than an error that unwraps to it, so `errors.As` still finds it.
@@ -105,6 +106,7 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/g
   gin's own answers to an unrouted request (the 404 for a path no route claims, and the 405 for a
   wrong method with `HandleMethodNotAllowed`) match it too, though no handler ran.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.1...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.3.0...HEAD
+[0.3.0]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.1...adapters/ginprblm/v0.3.0
 [0.2.1]: https://github.com/kartaladev/prblm/compare/adapters/ginprblm/v0.2.0...adapters/ginprblm/v0.2.1
 [0.2.0]: https://github.com/kartaladev/prblm/compare/ginprblm/v0.1.0...adapters/ginprblm/v0.2.0

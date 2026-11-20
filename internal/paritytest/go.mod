@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gofiber/fiber/v3 v3.7.0
-	github.com/kartaladev/prblm v0.2.0
+	github.com/kartaladev/prblm v0.3.0
 	github.com/kartaladev/prblm/adapters/fiberprblm v0.0.0-00010101000000-000000000000
 	github.com/kartaladev/prblm/adapters/ginprblm v0.0.0-00010101000000-000000000000
 )

@@ -9,11 +9,12 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/f
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-20
+
 ### Changed
 
-- Requires core v0.3.0, which brings the bounded error walk (listed under [Unreleased] in the
-  core's [CHANGELOG.md](../../CHANGELOG.md) until it is tagged). Until then, `go.mod` replaces the
-  core with `../..`, so this module is not releasable yet.
+- Requires core v0.3.0, which brings the bounded error walk (see the core's
+  [CHANGELOG.md](../../CHANGELOG.md), version 0.3.0).
 
 ### Fixed
 
@@ -85,5 +86,6 @@ module uses [Semantic Versioning](https://semver.org/). Its tags are `adapters/f
 - `github.com/valyala/fasthttp` is a direct requirement, at the version fiber already required; no
   new module enters the graph.
 
-[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/fiberprblm/v0.2.0...HEAD
+[Unreleased]: https://github.com/kartaladev/prblm/compare/adapters/fiberprblm/v0.3.0...HEAD
+[0.3.0]: https://github.com/kartaladev/prblm/compare/adapters/fiberprblm/v0.2.0...adapters/fiberprblm/v0.3.0
 [0.2.0]: https://github.com/kartaladev/prblm/compare/fiberprblm/v0.1.0...adapters/fiberprblm/v0.2.0
